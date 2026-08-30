@@ -128,7 +128,7 @@ async def preview_send(callback: CallbackQuery, state: FSMContext, session: Asyn
 
     await state.clear()
     await callback.message.edit_text(
-        f"📨 Ваше обращение #{request.id} принято.\n"
+        "📨 Ваше обращение принято.\n"
         "Мы передали его ответственным.\n"
         "Когда поступит ответ, мы сообщим вам."
     )

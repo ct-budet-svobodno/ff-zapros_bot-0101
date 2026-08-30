@@ -42,13 +42,13 @@ class RequestPreviewCB(CallbackData, prefix="reqprev"):
 
 
 class RequestActionCB(CallbackData, prefix="req"):
-    action: str  # take / reply / close
+    action: str  # reply / close
     request_id: int
 
 
-class ResponsePreviewCB(CallbackData, prefix="respprev"):
-    action: str  # send / cancel
-    request_id: int
+class ResponseActionCB(CallbackData, prefix="response"):
+    action: str  # send / retry / cancel
+    response_id: int
 
 
 # ---------------------- Админка: контент --------------------------------

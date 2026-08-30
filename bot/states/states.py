@@ -18,11 +18,6 @@ class RequestForm(StatesGroup):
     preview = State()
 
 
-class AdminReply(StatesGroup):
-    entering_response = State()
-    preview = State()
-
-
 class SectionEdit(StatesGroup):
     """Редактирование "длинного" текста (история факультета и т.п.)."""
     entering_text = State()

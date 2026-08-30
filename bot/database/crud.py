@@ -7,6 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import (
@@ -17,6 +18,8 @@ from database.models import (
     Document,
     FacultyAdminPerson,
     Request,
+    RequestResponse,
+    RequestResponseStatus,
     RequestStatus,
     StudentOrganization,
     User,
@@ -45,9 +48,27 @@ async def get_or_create_user(
         return user
     user = User(telegram_id=telegram_id, username=username, full_name=full_name)
     session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    return user
+    try:
+        await session.commit()
+        await session.refresh(user)
+        return user
+    except IntegrityError:
+        # Два апдейта одного Telegram-пользователя могут одновременно пройти
+        # SELECT. Один INSERT победит; после rollback возвращаем эту запись.
+        await session.rollback()
+        user = await session.scalar(select(User).where(User.telegram_id == telegram_id))
+        if user is None:
+            raise
+        changed = False
+        if user.username != username:
+            user.username = username
+            changed = True
+        if user.full_name != full_name:
+            user.full_name = full_name
+            changed = True
+        if changed:
+            await session.commit()
+        return user
 
 
 async def is_admin(session: AsyncSession, telegram_id: int) -> bool:
@@ -387,6 +408,17 @@ async def get_request(session: AsyncSession, request_id: int) -> Request | None:
     return await session.get(Request, request_id)
 
 
+async def get_request_by_group_message(
+    session: AsyncSession, chat_id: int, message_id: int
+) -> Request | None:
+    return await session.scalar(
+        select(Request).where(
+            Request.group_chat_id == chat_id,
+            Request.group_message_id == message_id,
+        )
+    )
+
+
 async def set_request_group_message(
     session: AsyncSession, request_id: int, chat_id: int, message_id: int
 ) -> None:
@@ -397,57 +429,138 @@ async def set_request_group_message(
         await session.commit()
 
 
-async def take_request(session: AsyncSession, request_id: int, admin_id: int) -> Request | None:
-    """
-    Атомарно назначает обращение администратору.
+async def create_response_draft(
+    session: AsyncSession,
+    request_id: int,
+    admin_id: int,
+    text: str,
+    source_message_id: int,
+) -> RequestResponse:
+    response = RequestResponse(
+        request_id=request_id,
+        admin_id=admin_id,
+        text=text,
+        source_message_id=source_message_id,
+        status=RequestResponseStatus.DRAFT.value,
+    )
+    session.add(response)
+    await session.commit()
+    await session.refresh(response)
+    return response
 
-    Ключевой момент: вместо SELECT -> проверка в Python -> UPDATE (что не даёт
-    гарантий при настоящей гонке двух одновременных вызовов), выполняется
-    один SQL-запрос `UPDATE ... WHERE id = :id AND status = 'NEW'`. СУБД
-    гарантирует, что при двух конкурентных транзакциях условие `status = 'NEW'`
-    успешно совпадёт ровно у одной из них — вторая получит rowcount == 0,
-    даже если обе читали status='NEW' "одновременно" до начала своих
-    транзакций. Это и есть настоящая защита от race condition на уровне БД,
-    а не на уровне приложения.
 
-    Возвращает обновлённый Request, если ИМЕННО ЭТОТ вызов забрал обращение,
-    либо None, если оно уже было (или стало во время гонки) не в статусе NEW.
-    """
+async def get_response(session: AsyncSession, response_id: int) -> RequestResponse | None:
+    return await session.get(RequestResponse, response_id)
+
+
+async def set_response_preview_message(
+    session: AsyncSession, response_id: int, message_id: int
+) -> None:
+    response = await session.get(RequestResponse, response_id)
+    if response:
+        response.preview_message_id = message_id
+        await session.commit()
+
+
+async def claim_response_for_sending(
+    session: AsyncSession, response_id: int, admin_id: int
+) -> RequestResponse | None:
     stmt = (
-        update(Request)
-        .where(Request.id == request_id, Request.status == RequestStatus.NEW.value)
-        .values(
-            status=RequestStatus.IN_PROGRESS.value,
-            admin_id=admin_id,
-            taken_at=datetime.utcnow(),
+        update(RequestResponse)
+        .where(
+            RequestResponse.id == response_id,
+            RequestResponse.admin_id == admin_id,
+            RequestResponse.status.in_([
+                RequestResponseStatus.DRAFT.value,
+                RequestResponseStatus.FAILED.value,
+            ]),
         )
+        .values(status=RequestResponseStatus.SENDING.value)
     )
     result = await session.execute(stmt)
     await session.commit()
     if result.rowcount != 1:
         return None
-    # populate_existing гарантирует, что мы получим свежие данные из БД,
-    # а не устаревший объект из identity map сессии.
-    return await session.get(Request, request_id, populate_existing=True)
+    return await session.get(RequestResponse, response_id, populate_existing=True)
 
 
-async def set_request_response(session: AsyncSession, request_id: int, response_text: str) -> Request | None:
-    request = await session.get(Request, request_id)
-    if request:
-        request.response_text = response_text
+async def mark_response_failed(session: AsyncSession, response_id: int) -> RequestResponse | None:
+    response = await session.get(RequestResponse, response_id)
+    if response:
+        response.status = RequestResponseStatus.FAILED.value
         await session.commit()
-        await session.refresh(request)
-    return request
+        await session.refresh(response)
+    return response
+
+
+async def mark_response_sent(session: AsyncSession, response_id: int) -> RequestResponse | None:
+    response = await session.get(RequestResponse, response_id)
+    if response is None:
+        return None
+
+    response.status = RequestResponseStatus.SENT.value
+    response.sent_at = datetime.utcnow()
+
+    request = await session.get(Request, response.request_id)
+    if request:
+        # Поле сохраняется для обратной совместимости; полная история живёт
+        # в request_responses.
+        request.response_text = response.text
+        if request.status == RequestStatus.NEW.value:
+            request.status = RequestStatus.IN_PROGRESS.value
+            request.taken_at = datetime.utcnow()
+        if request.admin_id is None:
+            request.admin_id = response.admin_id
+
+    await session.commit()
+    await session.refresh(response)
+    return response
+
+
+async def cancel_response(
+    session: AsyncSession, response_id: int, admin_id: int
+) -> RequestResponse | None:
+    response = await session.get(RequestResponse, response_id)
+    if (
+        response is None
+        or response.admin_id != admin_id
+        or response.status not in {
+            RequestResponseStatus.DRAFT.value,
+            RequestResponseStatus.FAILED.value,
+        }
+    ):
+        return None
+    response.status = RequestResponseStatus.CANCELLED.value
+    await session.commit()
+    await session.refresh(response)
+    return response
+
+
+async def count_sent_responses(session: AsyncSession, request_id: int) -> int:
+    return await session.scalar(
+        select(func.count(RequestResponse.id)).where(
+            RequestResponse.request_id == request_id,
+            RequestResponse.status == RequestResponseStatus.SENT.value,
+        )
+    ) or 0
 
 
 async def close_request(session: AsyncSession, request_id: int) -> Request | None:
-    request = await session.get(Request, request_id)
-    if request:
-        request.status = RequestStatus.CLOSED.value
-        request.closed_at = datetime.utcnow()
-        await session.commit()
-        await session.refresh(request)
-    return request
+    result = await session.execute(
+        update(Request)
+        .where(
+            Request.id == request_id,
+            Request.status != RequestStatus.CLOSED.value,
+        )
+        .values(
+            status=RequestStatus.CLOSED.value,
+            closed_at=datetime.utcnow(),
+        )
+    )
+    await session.commit()
+    if result.rowcount != 1:
+        return None
+    return await session.get(Request, request_id, populate_existing=True)
 
 
 async def get_requests_stats(session: AsyncSession) -> dict:

@@ -19,6 +19,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -69,6 +70,14 @@ class RequestStatus(str, enum.Enum):
     CLOSED = "CLOSED"
 
 
+class RequestResponseStatus(str, enum.Enum):
+    DRAFT = "DRAFT"
+    SENDING = "SENDING"
+    SENT = "SENT"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
 class Course(str, enum.Enum):
     C1 = "1 курс"
     C2 = "2 курс"
@@ -112,6 +121,39 @@ class Request(Base):
 
     user: Mapped["User"] = relationship(back_populates="requests")
     admin: Mapped["Admin | None"] = relationship()
+    responses: Mapped[list["RequestResponse"]] = relationship(
+        back_populates="request",
+        cascade="all, delete-orphan",
+    )
+
+
+class RequestResponse(Base):
+    """Отдельный ответ администра на обращение.
+
+    История ответов хранится отдельно, поэтому несколько администраторов
+    могут отвечать на одно обращение, не перезаписывая друг друга.
+    """
+
+    __tablename__ = "request_responses"
+    __table_args__ = (
+        UniqueConstraint("request_id", "source_message_id", name="uq_response_source_message"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("requests.id"), nullable=False, index=True)
+    admin_id: Mapped[int] = mapped_column(ForeignKey("admins.id"), nullable=False, index=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), default=RequestResponseStatus.DRAFT.value, nullable=False, index=True
+    )
+    # NULL используется только для переноса старых response_text.
+    source_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    preview_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    request: Mapped["Request"] = relationship(back_populates="responses")
+    admin: Mapped["Admin"] = relationship()
 
 
 # --------------------------------------------------------------------------

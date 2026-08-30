@@ -37,7 +37,7 @@ def request_preview_text(is_anonymous: bool, course: str, building: str, questio
     )
 
 
-def group_message_text(request: Request, author_label: str) -> str:
+def group_message_text(request: Request, author_label: str, response_count: int = 0) -> str:
     status_label = STATUS_LABELS.get(request.status, request.status)
     header = f"📨 НОВОЕ ОБРАЩЕНИЕ #{request.id}" if request.status == RequestStatus.NEW.value \
         else f"📨 ОБРАЩЕНИЕ #{request.id}"
@@ -54,9 +54,13 @@ def group_message_text(request: Request, author_label: str) -> str:
         f"🕐 {fmt_dt(request.created_at)}",
         "",
         f"Статус: {status_label}",
+        f"💬 Ответов доставлено: {response_count}",
     ]
-    if request.admin_id and request.status != RequestStatus.NEW.value:
-        lines.append(f"Ответственный: admin_id={request.admin_id}")
+    if request.status != RequestStatus.CLOSED.value:
+        lines.extend([
+            "",
+            "↩️ Чтобы ответить, используйте Reply на это сообщение.",
+        ])
     return "\n".join(lines)
 
 

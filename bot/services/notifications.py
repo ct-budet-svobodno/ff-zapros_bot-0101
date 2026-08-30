@@ -45,12 +45,17 @@ async def publish_request_to_group(bot: Bot, request: Request, user: User) -> tu
         return None
 
 
-async def update_group_message_safe(bot: Bot, request: Request, user: User) -> None:
+async def update_group_message_safe(
+    bot: Bot,
+    request: Request,
+    user: User,
+    response_count: int = 0,
+) -> None:
     """Обновляет текст/клавиатуру сообщения в группе после смены статуса."""
     if not request.group_chat_id or not request.group_message_id:
         return
     label = author_label(request, user.username, user.full_name)
-    text = group_message_text(request, label)
+    text = group_message_text(request, label, response_count=response_count)
     try:
         await bot.edit_message_text(
             chat_id=request.group_chat_id,

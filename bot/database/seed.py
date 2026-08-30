@@ -13,7 +13,7 @@
 import asyncio
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from config import settings
 from database.engine import async_session_maker, init_db
@@ -22,6 +22,9 @@ from database.models import (
     ContentSection,
     CouncilLeader,
     OrgCategory,
+    Request,
+    RequestResponse,
+    RequestResponseStatus,
     StudentOrganization,
 )
 
@@ -165,6 +168,39 @@ async def seed_organizations(session) -> None:
     )
 
 
+async def migrate_legacy_responses(session) -> None:
+    """Перенести единственный старый response_text в историю ответов."""
+    legacy_requests = await session.scalars(
+        select(Request).where(
+            Request.response_text.is_not(None),
+            Request.admin_id.is_not(None),
+        )
+    )
+    for request in legacy_requests:
+        existing = await session.scalar(
+            select(RequestResponse.id).where(RequestResponse.request_id == request.id).limit(1)
+        )
+        if existing is None:
+            session.add(
+                RequestResponse(
+                    request_id=request.id,
+                    admin_id=request.admin_id,
+                    text=request.response_text,
+                    status=RequestResponseStatus.SENT.value,
+                    source_message_id=None,
+                    sent_at=request.closed_at or request.taken_at,
+                )
+            )
+
+    # Если процесс завершился между claim и Telegram API, черновик можно
+    # повторить после перезапуска.
+    await session.execute(
+        update(RequestResponse)
+        .where(RequestResponse.status == RequestResponseStatus.SENDING.value)
+        .values(status=RequestResponseStatus.FAILED.value)
+    )
+
+
 async def run_seed() -> None:
     await init_db()
     async with async_session_maker() as session:
@@ -172,6 +208,7 @@ async def run_seed() -> None:
         await seed_content_sections(session)
         await seed_council_leaders(session)
         await seed_organizations(session)
+        await migrate_legacy_responses(session)
         await session.commit()
     logger.info("Инициализация БД завершена.")
 

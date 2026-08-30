@@ -18,7 +18,7 @@ from utils.callback_data import (
     LeaderAdminCB,
     OrgAdminCB,
     RequestActionCB,
-    ResponsePreviewCB,
+    ResponseActionCB,
     SectionCB,
     SectionPreviewCB,
 )
@@ -256,24 +256,32 @@ def request_group_kb(request_id: int, status: str) -> InlineKeyboardMarkup:
     if status == RequestStatus.NEW.value:
         return InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(
-                text="💬 Ответить", callback_data=RequestActionCB(action="reply", request_id=request_id).pack()
+                text="↩️ Как ответить", callback_data=RequestActionCB(action="reply", request_id=request_id).pack()
             )]]
         )
     if status == RequestStatus.IN_PROGRESS.value:
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="💬 Ответить", callback_data=RequestActionCB(action="reply", request_id=request_id).pack())],
+                [InlineKeyboardButton(text="↩️ Как ответить", callback_data=RequestActionCB(action="reply", request_id=request_id).pack())],
                 [InlineKeyboardButton(text="✅ Закрыть обращение", callback_data=RequestActionCB(action="close", request_id=request_id).pack())],
             ]
         )
     return InlineKeyboardMarkup(inline_keyboard=[])
 
 
-def response_preview_kb(request_id: int) -> InlineKeyboardMarkup:
+def response_preview_kb(response_id: int, retry: bool = False) -> InlineKeyboardMarkup:
+    send_text = "🔄 Повторить отправку" if retry else "✅ Отправить студенту"
+    action = "retry" if retry else "send"
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Отправить", callback_data=ResponsePreviewCB(action="send", request_id=request_id).pack())],
-            [InlineKeyboardButton(text="❌ Отменить", callback_data=ResponsePreviewCB(action="cancel", request_id=request_id).pack())],
+            [InlineKeyboardButton(
+                text=send_text,
+                callback_data=ResponseActionCB(action=action, response_id=response_id).pack(),
+            )],
+            [InlineKeyboardButton(
+                text="❌ Отменить",
+                callback_data=ResponseActionCB(action="cancel", response_id=response_id).pack(),
+            )],
         ]
     )
 
