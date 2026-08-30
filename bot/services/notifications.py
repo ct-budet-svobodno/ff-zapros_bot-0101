@@ -35,6 +35,7 @@ async def publish_request_to_group(bot: Bot, request: Request, user: User) -> tu
     try:
         message = await bot.send_message(
             chat_id=settings.work_group_id,
+            message_thread_id=settings.work_group_thread_id,
             text=text,
             reply_markup=request_group_kb(request.id, request.status),
         )

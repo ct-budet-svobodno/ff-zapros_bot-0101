@@ -22,6 +22,8 @@ from utils.callback_data import AnonymityCB, BuildingCB, CourseCB, RequestPrevie
 from utils.formatting import request_preview_text
 
 router = Router(name="user_request")
+router.message.filter(F.chat.type == "private")
+router.callback_query.filter(F.message.chat.type == "private")
 
 
 @router.message(F.text == BTN_ASK)

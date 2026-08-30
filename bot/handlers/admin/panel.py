@@ -21,7 +21,7 @@ router.callback_query.filter(IsAdmin())
 ADMIN_PANEL_TEXT = "🔐 Панель администратора"
 
 
-@router.message(Command("admin"))
+@router.message(Command("admin"), F.chat.type == "private")
 async def cmd_admin(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(ADMIN_PANEL_TEXT, reply_markup=admin_main_menu_kb())

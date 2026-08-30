@@ -14,6 +14,8 @@ from keyboards.user_kb import (
 from utils.callback_data import FacultyAdminCB, MenuCB, OrgCategoryCB, OrgItemCB
 
 router = Router(name="user_about")
+router.message.filter(F.chat.type == "private")
+router.callback_query.filter(F.message.chat.type == "private")
 
 PLACEHOLDER_EMPTY = "Информация пока не добавлена администратором. Загляните позже 🙂"
 

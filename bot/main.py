@@ -14,6 +14,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats
 
 from config import settings
 from database.engine import init_db
@@ -27,6 +28,7 @@ from handlers.admin import leaders as admin_leaders
 from handlers.admin import organizations as admin_organizations
 from handlers.admin import panel as admin_panel
 from handlers.admin import requests as admin_requests
+from handlers import ids
 from handlers.requests import user_request
 from handlers.user import about as user_about
 from handlers.user import council as user_council
@@ -56,11 +58,26 @@ async def main() -> None:
     )
     dp = Dispatcher(storage=MemoryStorage())
 
+    private_commands = [
+        BotCommand(command="start", description="Запустить бота"),
+        BotCommand(command="menu", description="Открыть главное меню"),
+        BotCommand(command="admin", description="Открыть админ-панель"),
+        BotCommand(command="ids", description="Показать ID чата и темы"),
+    ]
+    await bot.set_my_commands(private_commands, scope=BotCommandScopeAllPrivateChats())
+    await bot.set_my_commands(
+        [
+            BotCommand(command="ids", description="Показать ID чата и темы"),
+        ],
+        scope=BotCommandScopeAllGroupChats(),
+    )
+
     # Middleware с сессией БД — на все типы апдейтов.
     dp.update.middleware(DbSessionMiddleware())
 
     # Роутеры. Порядок важен (см. докстринг модуля).
     dp.include_router(error_router)
+    dp.include_router(ids.router)
 
     dp.include_router(admin_panel.router)
     dp.include_router(admin_content.router)

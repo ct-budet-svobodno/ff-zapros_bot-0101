@@ -9,6 +9,8 @@ from keyboards.user_kb import documentation_kb
 from utils.callback_data import DocItemCB, MenuCB
 
 router = Router(name="user_documentation")
+router.message.filter(F.chat.type == "private")
+router.callback_query.filter(F.message.chat.type == "private")
 
 PLACEHOLDER_EMPTY = (
     "Документы пока не добавлены администратором. Загляните позже 🙂"

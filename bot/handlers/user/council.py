@@ -8,6 +8,8 @@ from keyboards.user_kb import council_menu_kb, digests_kb, leaders_kb, media_kb
 from utils.callback_data import DigestItemCB, LeaderAdminCB, MenuCB
 
 router = Router(name="user_council")
+router.message.filter(F.chat.type == "private")
+router.callback_query.filter(F.message.chat.type == "private")
 
 PLACEHOLDER_EMPTY = "Информация пока не добавлена администратором. Загляните позже 🙂"
 

@@ -60,6 +60,13 @@ class Settings:
     work_group_id: int = field(
         default_factory=lambda: int(_get_env("WORK_GROUP_ID", required=True))
     )
+    # ID темы (message_thread_id) в рабочей супергруппе. Если не задан,
+    # обращения отправляются в общую тему группы.
+    work_group_thread_id: int | None = field(
+        default_factory=lambda: (
+            int(value) if (value := os.getenv("WORK_GROUP_THREAD_ID")) else None
+        )
+    )
     # Начальный администратор(ы) — можно указать несколько ID через запятую.
     initial_admin_ids: list[int] = field(
         default_factory=lambda: _parse_int_list(os.getenv("INITIAL_ADMIN_ID"))

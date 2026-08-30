@@ -1,7 +1,4 @@
-"""
-/start и базовая навигация по главному меню (в т.ч. кнопка "🏠 Главное меню"
-внутри inline-клавиатур).
-"""
+"""/start, /menu и базовая навигация по главному меню."""
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -22,7 +19,7 @@ WELCOME_TEXT = (
 )
 
 
-@router.message(CommandStart())
+@router.message(CommandStart(), F.chat.type == "private")
 async def cmd_start(message: Message, state: FSMContext, session: AsyncSession) -> None:
     await state.clear()
     await get_or_create_user(
@@ -31,13 +28,16 @@ async def cmd_start(message: Message, state: FSMContext, session: AsyncSession) 
     await message.answer(WELCOME_TEXT, reply_markup=main_menu_kb())
 
 
-@router.message(Command("menu"))
+@router.message(Command("menu"), F.chat.type == "private")
 async def cmd_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("🏠 Главное меню:", reply_markup=main_menu_kb())
 
 
-@router.callback_query(MenuCB.filter(F.target == "home_inline"))
+@router.callback_query(
+    MenuCB.filter(F.target == "home_inline"),
+    F.message.chat.type == "private",
+)
 async def cb_home_inline(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.delete()
@@ -45,7 +45,10 @@ async def cb_home_inline(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.callback_query(MenuCB.filter(F.target == "home"))
+@router.callback_query(
+    MenuCB.filter(F.target == "home"),
+    F.message.chat.type == "private",
+)
 async def cb_home(callback: CallbackQuery, state: FSMContext) -> None:
     # Используется как "Назад" из разделов первого уровня (например, "О факультете")
     await cb_home_inline(callback, state)
