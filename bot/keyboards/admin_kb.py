@@ -8,6 +8,7 @@ from database.models import (
     FacultyAdminPerson,
     StudentOrganization,
 )
+from keyboards.common_kb import short_button_text
 from utils.callback_data import (
     AdminManageCB,
     AdminMenuCB,
@@ -54,7 +55,7 @@ def content_management_kb() -> InlineKeyboardMarkup:
 
 
 def sections_list_kb(sections: list[ContentSection]) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text=s.title, callback_data=SectionCB(key=s.key, action="view").pack())]
+    rows = [[InlineKeyboardButton(text=short_button_text(s.title), callback_data=SectionCB(key=s.key, action="view").pack())]
             for s in sections]
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=AdminMenuCB(target="content").pack())])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -83,7 +84,7 @@ def fadmins_list_kb(people: list[FacultyAdminPerson]) -> InlineKeyboardMarkup:
     for p in people:
         label = p.full_name if p.is_active else f"🚫 {p.full_name}"
         rows.append([InlineKeyboardButton(
-            text=label, callback_data=FacultyAdminCB(action="admview", person_id=p.id).pack()
+            text=short_button_text(label), callback_data=FacultyAdminCB(action="admview", person_id=p.id).pack()
         )])
     rows.append([InlineKeyboardButton(text="➕ Добавить", callback_data=FacultyAdminCB(action="add").pack())])
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=AdminMenuCB(target="content").pack())])
@@ -132,46 +133,84 @@ def form_preview_kb() -> InlineKeyboardMarkup:
     )
 
 
-def orgs_categories_admin_kb(categories: list[str]) -> InlineKeyboardMarkup:
+def orgs_categories_admin_kb(
+    categories: list[StudentOrganization],
+) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(
-        text=c, callback_data=OrgAdminCB(action="choose_cat", category=c).pack()
-    )] for c in categories]
+        text=short_button_text(org.category),
+        callback_data=OrgAdminCB(action="choose_cat", org_id=org.id).pack(),
+    )] for org in categories]
     rows.append([InlineKeyboardButton(text="➕ Добавить организацию", callback_data=OrgAdminCB(action="add").pack())])
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=AdminMenuCB(target="content").pack())])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def orgs_list_admin_kb(orgs: list[StudentOrganization], category: str) -> InlineKeyboardMarkup:
+def orgs_list_admin_kb(orgs: list[StudentOrganization]) -> InlineKeyboardMarkup:
     rows = []
     for o in orgs:
         label = o.name if o.is_active else f"🚫 {o.name}"
         rows.append([InlineKeyboardButton(
-            text=label, callback_data=OrgAdminCB(action="view", org_id=o.id, category=category).pack()
+            text=short_button_text(label), callback_data=OrgAdminCB(action="view", org_id=o.id).pack()
         )])
-    rows.append([InlineKeyboardButton(text="➕ Добавить в эту категорию", callback_data=OrgAdminCB(action="add", category=category).pack())])
+    if orgs:
+        rows.append([InlineKeyboardButton(
+            text="➕ Добавить в эту категорию",
+            callback_data=OrgAdminCB(action="add", org_id=orgs[0].id).pack(),
+        )])
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=AdminMenuCB(target="content_orgs").pack())])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def org_detail_admin_kb(org: StudentOrganization) -> InlineKeyboardMarkup:
     visibility_text = "🚫 Скрыть от пользователей" if org.is_active else "👁 Показывать пользователям"
+    text_action = "📝 Изменить текст" if org.description else "➕ Добавить текст"
+    rows = [
+        [InlineKeyboardButton(
+            text=text_action,
+            callback_data=OrgAdminCB(
+                action="edit_field",
+                org_id=org.id,
+                field="description",
+            ).pack(),
+        )],
+    ]
+    if org.description:
+        rows.append([InlineKeyboardButton(
+            text="🧹 Удалить текст",
+            callback_data=OrgAdminCB(action="clear_text", org_id=org.id).pack(),
+        )])
+    rows.extend([
+        [InlineKeyboardButton(text="⚙️ Название, категория и ссылка", callback_data=OrgAdminCB(action="edit_menu", org_id=org.id).pack())],
+        [InlineKeyboardButton(text=visibility_text, callback_data=OrgAdminCB(action="toggle_active", org_id=org.id).pack())],
+        [InlineKeyboardButton(text="🗑 Удалить организацию целиком", callback_data=OrgAdminCB(action="delete", org_id=org.id).pack())],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data=OrgAdminCB(action="choose_cat", org_id=org.id).pack())],
+    ])
+    return InlineKeyboardMarkup(
+        inline_keyboard=rows
+    )
+
+
+def org_clear_text_confirm_kb(org_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="✏️ Изменить", callback_data=OrgAdminCB(action="edit_menu", org_id=org.id, category=org.category).pack())],
-            [InlineKeyboardButton(text=visibility_text, callback_data=OrgAdminCB(action="toggle_active", org_id=org.id, category=org.category).pack())],
-            [InlineKeyboardButton(text="🗑 Удалить", callback_data=OrgAdminCB(action="delete", org_id=org.id, category=org.category).pack())],
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data=OrgAdminCB(action="choose_cat", category=org.category).pack())],
+            [InlineKeyboardButton(
+                text="✅ Да, удалить только текст",
+                callback_data=OrgAdminCB(action="clear_text_confirm", org_id=org_id).pack(),
+            )],
+            [InlineKeyboardButton(
+                text="❌ Отменить",
+                callback_data=OrgAdminCB(action="view", org_id=org_id).pack(),
+            )],
         ]
     )
 
 
 def org_edit_menu_kb(org: StudentOrganization) -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton(text="Категория", callback_data=OrgAdminCB(action="edit_field", org_id=org.id, category=org.category, field="category").pack())],
-        [InlineKeyboardButton(text="Название", callback_data=OrgAdminCB(action="edit_field", org_id=org.id, category=org.category, field="name").pack())],
-        [InlineKeyboardButton(text="Описание", callback_data=OrgAdminCB(action="edit_field", org_id=org.id, category=org.category, field="description").pack())],
-        [InlineKeyboardButton(text="Ссылка", callback_data=OrgAdminCB(action="edit_field", org_id=org.id, category=org.category, field="link").pack())],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data=OrgAdminCB(action="view", org_id=org.id, category=org.category).pack())],
+        [InlineKeyboardButton(text="Категория", callback_data=OrgAdminCB(action="edit_field", org_id=org.id, field="category").pack())],
+        [InlineKeyboardButton(text="Название", callback_data=OrgAdminCB(action="edit_field", org_id=org.id, field="name").pack())],
+        [InlineKeyboardButton(text="Ссылка", callback_data=OrgAdminCB(action="edit_field", org_id=org.id, field="link").pack())],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data=OrgAdminCB(action="view", org_id=org.id).pack())],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -181,7 +220,7 @@ def leaders_list_admin_kb(leaders: list[CouncilLeader]) -> InlineKeyboardMarkup:
     for l in leaders:
         label = l.full_name if l.is_active else f"🚫 {l.full_name}"
         rows.append([InlineKeyboardButton(
-            text=label, callback_data=LeaderAdminCB(action="admview", leader_id=l.id).pack()
+            text=short_button_text(label), callback_data=LeaderAdminCB(action="admview", leader_id=l.id).pack()
         )])
     rows.append([InlineKeyboardButton(text="➕ Добавить", callback_data=LeaderAdminCB(action="add").pack())])
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=AdminMenuCB(target="root").pack())])
@@ -214,7 +253,7 @@ def leader_edit_menu_kb(leader: CouncilLeader) -> InlineKeyboardMarkup:
 
 
 def digests_list_admin_kb(digests: list[Digest]) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text=d.month_label, callback_data=DigestAdminCB(action="view", digest_id=d.id).pack())]
+    rows = [[InlineKeyboardButton(text=short_button_text(d.month_label), callback_data=DigestAdminCB(action="view", digest_id=d.id).pack())]
             for d in digests]
     rows.append([InlineKeyboardButton(text="➕ Создать дайджест", callback_data=DigestAdminCB(action="add").pack())])
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=AdminMenuCB(target="root").pack())])
@@ -232,7 +271,7 @@ def digest_detail_admin_kb(digest_id: int) -> InlineKeyboardMarkup:
 
 
 def docs_list_admin_kb(documents: list[Document]) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text=d.title, callback_data=DocAdminCB(action="view", doc_id=d.id).pack())]
+    rows = [[InlineKeyboardButton(text=short_button_text(d.title), callback_data=DocAdminCB(action="view", doc_id=d.id).pack())]
             for d in documents]
     rows.append([InlineKeyboardButton(text="➕ Добавить документ", callback_data=DocAdminCB(action="add").pack())])
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=AdminMenuCB(target="root").pack())])

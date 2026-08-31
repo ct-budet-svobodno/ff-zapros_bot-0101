@@ -1,7 +1,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from database.models import CouncilLeader, Digest, Document, FacultyAdminPerson, StudentOrganization
-from keyboards.common_kb import kb_with_nav
+from keyboards.common_kb import kb_with_nav, short_button_text
 from utils.callback_data import (
     AnonymityCB,
     BuildingCB,
@@ -31,27 +31,30 @@ def faculty_admins_kb(people: list[FacultyAdminPerson]) -> InlineKeyboardMarkup:
         return kb_with_nav([], back_target="about")
     for p in people:
         rows.append([InlineKeyboardButton(
-            text=p.full_name, callback_data=FacultyAdminCB(action="view", person_id=p.id).pack()
+            text=short_button_text(p.full_name), callback_data=FacultyAdminCB(action="view", person_id=p.id).pack()
         )])
     return kb_with_nav(rows, back_target="about")
 
 
-def org_categories_kb(categories: list[str]) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text=c, callback_data=OrgCategoryCB(category=c).pack())] for c in categories]
+def org_categories_kb(categories: list[StudentOrganization]) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(
+        text=short_button_text(org.category),
+        callback_data=OrgCategoryCB(org_id=org.id).pack(),
+    )] for org in categories]
     return kb_with_nav(rows, back_target="about")
 
 
-def org_items_kb(items: list[StudentOrganization], category: str) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text=i.name, callback_data=OrgItemCB(org_id=i.id).pack())] for i in items]
+def org_items_kb(items: list[StudentOrganization]) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text=short_button_text(i.name), callback_data=OrgItemCB(org_id=i.id).pack())] for i in items]
     return kb_with_nav(rows, back_target="orgs")
 
 
 def org_item_detail_kb(org: StudentOrganization) -> InlineKeyboardMarkup:
     rows = []
-    if org.link:
+    if org.link and org.link.startswith(("http://", "https://")):
         rows.append([InlineKeyboardButton(text="🔗 Открыть ссылку", url=org.link)])
     rows.append([InlineKeyboardButton(
-        text="⬅️ Назад", callback_data=OrgCategoryCB(category=org.category).pack()
+        text="⬅️ Назад", callback_data=OrgCategoryCB(org_id=org.id).pack()
     )])
     rows.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data=MenuCB(target="home_inline").pack())])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -69,13 +72,13 @@ def council_menu_kb() -> InlineKeyboardMarkup:
 
 def leaders_kb(leaders: list[CouncilLeader]) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(
-        text=f"{l.position}", callback_data=LeaderAdminCB(action="view", leader_id=l.id).pack()
+        text=short_button_text(l.position), callback_data=LeaderAdminCB(action="view", leader_id=l.id).pack()
     )] for l in leaders]
     return kb_with_nav(rows, back_target="council")
 
 
 def digests_kb(digests: list[Digest]) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text=d.month_label, callback_data=DigestItemCB(digest_id=d.id).pack())]
+    rows = [[InlineKeyboardButton(text=short_button_text(d.month_label), callback_data=DigestItemCB(digest_id=d.id).pack())]
             for d in digests]
     return kb_with_nav(rows, back_target="council")
 
@@ -91,7 +94,7 @@ def media_kb() -> InlineKeyboardMarkup:
 
 
 def documentation_kb(documents: list[Document]) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text=f"📄 {d.title}", callback_data=DocItemCB(doc_id=d.id).pack())]
+    rows = [[InlineKeyboardButton(text=short_button_text(f"📄 {d.title}"), callback_data=DocItemCB(doc_id=d.id).pack())]
             for d in documents]
     return kb_with_nav(rows, back_target="home")
 

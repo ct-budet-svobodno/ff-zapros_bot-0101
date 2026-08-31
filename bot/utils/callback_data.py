@@ -10,7 +10,7 @@ class MenuCB(CallbackData, prefix="menu"):
 
 
 class OrgCategoryCB(CallbackData, prefix="orgcat"):
-    category: str
+    org_id: int  # ID любой организации из выбранной категории
 
 
 class OrgItemCB(CallbackData, prefix="org"):
@@ -70,20 +70,20 @@ class SectionPreviewCB(CallbackData, prefix="sectprev"):
 class FacultyAdminCB(CallbackData, prefix="fadm"):
     action: str  # list / admview / view / add / delete / edit_menu / edit_field / toggle_active / delete_photo
     person_id: int = 0
-    field: str = ""  # name / position / contact / photo
+    # Aiogram распаковывает пустую часть callback_data как None.
+    field: str | None = None  # name / position / contact / photo
 
 
 class OrgAdminCB(CallbackData, prefix="orgadm"):
-    action: str  # list / view / add / delete / choose_cat / edit_menu / edit_field / toggle_active
+    action: str  # view / add / delete / choose_cat / edit_menu / edit_field / clear_text / clear_text_confirm / toggle_active
     org_id: int = 0
-    category: str = ""
-    field: str = ""  # category / name / description / link
+    field: str | None = None  # category / name / description / link
 
 
 class LeaderAdminCB(CallbackData, prefix="ladm"):
     action: str  # list / admview / view / add / delete / edit_menu / edit_field / toggle_active / delete_photo
     leader_id: int = 0
-    field: str = ""  # name / position / username / photo
+    field: str | None = None  # name / position / username / photo
 
 
 class DigestAdminCB(CallbackData, prefix="dgadm"):

@@ -15,10 +15,14 @@ from keyboards.admin_kb import doc_detail_admin_kb, docs_list_admin_kb, form_con
 from states.states import DocumentEdit, DocumentForm
 from utils.admin_filter import IsAdmin
 from utils.callback_data import AdminMenuCB, DocAdminCB, FormControlCB
+from utils.formatting import escape_html
 
 router = Router(name="admin_documents")
 router.message.filter(IsAdmin())
 router.callback_query.filter(IsAdmin())
+
+MAX_DOCUMENT_TITLE_LENGTH = 150
+MAX_DOCUMENT_DESCRIPTION_LENGTH = 700
 
 
 @router.callback_query(AdminMenuCB.filter(F.target == "docs"))
@@ -40,7 +44,10 @@ async def cb_view(callback: CallbackQuery, callback_data: DocAdminCB, session: A
     if not document:
         await callback.answer("Не найдено.", show_alert=True)
         return
-    text = f"📄 <b>{document.title}</b>\n\n{document.description or '—'}"
+    text = (
+        f"📄 <b>{escape_html(document.title)}</b>\n\n"
+        f"{escape_html(document.description or '—')}"
+    )
     await callback.message.edit_text(text, reply_markup=doc_detail_admin_kb(document.id), parse_mode="HTML")
     await callback.answer()
 
@@ -80,7 +87,8 @@ async def cb_form_cancel(callback: CallbackQuery, state: FSMContext, session: As
         document = await crud.get_document(session, data.get("doc_id"))
         if document:
             await callback.message.edit_text(
-                f"📄 <b>{document.title}</b>\n\n{document.description or '—'}",
+                f"📄 <b>{escape_html(document.title)}</b>\n\n"
+                f"{escape_html(document.description or '—')}",
                 reply_markup=doc_detail_admin_kb(document.id),
                 parse_mode="HTML",
             )
@@ -89,16 +97,50 @@ async def cb_form_cancel(callback: CallbackQuery, state: FSMContext, session: As
 
 @router.message(DocumentForm.entering_title, F.text)
 async def add_title(message: Message, state: FSMContext) -> None:
-    await state.update_data(title=message.text.strip())
+    title = " ".join(message.text.split())
+    if not title:
+        await message.answer("⚠️ Название не может быть пустым.")
+        return
+    if len(title) > MAX_DOCUMENT_TITLE_LENGTH:
+        await message.answer(
+            f"⚠️ Название слишком длинное. Максимум — {MAX_DOCUMENT_TITLE_LENGTH} символов."
+        )
+        return
+    await state.update_data(title=title)
     await state.set_state(DocumentForm.entering_description)
-    await message.answer("Введите краткое описание документа:", reply_markup=form_control_kb())
+    await message.answer(
+        "Введите краткое описание документа или «-», если оно не нужно:",
+        reply_markup=form_control_kb(),
+    )
+
+
+@router.message(DocumentForm.entering_title)
+async def add_title_wrong_type(message: Message) -> None:
+    await message.answer("⚠️ Отправьте название документа обычным текстом.")
 
 
 @router.message(DocumentForm.entering_description, F.text)
 async def add_description(message: Message, state: FSMContext) -> None:
-    await state.update_data(description=message.text.strip())
+    description = message.text.strip()
+    if description == "-":
+        description = None
+    elif not description:
+        await message.answer("⚠️ Отправьте описание или «-», если оно не нужно.")
+        return
+    elif len(description) > MAX_DOCUMENT_DESCRIPTION_LENGTH:
+        await message.answer(
+            "⚠️ Описание слишком длинное. Максимум — "
+            f"{MAX_DOCUMENT_DESCRIPTION_LENGTH} символов."
+        )
+        return
+    await state.update_data(description=description)
     await state.set_state(DocumentForm.uploading_pdf)
     await message.answer("Загрузите PDF-файл документа:", reply_markup=form_control_kb())
+
+
+@router.message(DocumentForm.entering_description)
+async def add_description_wrong_type(message: Message) -> None:
+    await message.answer("⚠️ Отправьте описание обычным текстом или «-».")
 
 
 @router.message(DocumentForm.uploading_pdf, F.document)
@@ -107,11 +149,16 @@ async def add_pdf(message: Message, state: FSMContext) -> None:
     if doc.mime_type != "application/pdf" and not (doc.file_name or "").lower().endswith(".pdf"):
         await message.answer("⚠️ Пожалуйста, загрузите файл в формате PDF.")
         return
-    await state.update_data(file_id=doc.file_id, file_name=doc.file_name)
+    file_name = (doc.file_name or "document.pdf")[:255]
+    await state.update_data(file_id=doc.file_id, file_name=file_name)
     data = await state.get_data()
     await state.set_state(DocumentForm.preview)
-    text = f"Предпросмотр:\n\n📄 {data['title']}\n{data['description']}\n\nФайл: {doc.file_name}"
-    await message.answer(text, reply_markup=form_preview_kb())
+    text = (
+        f"Предпросмотр:\n\n📄 <b>{escape_html(data['title'])}</b>\n"
+        f"{escape_html(data.get('description') or 'Без описания')}\n\n"
+        f"Файл: {escape_html(file_name)}"
+    )
+    await message.answer(text, reply_markup=form_preview_kb(), parse_mode="HTML")
 
 
 @router.message(DocumentForm.uploading_pdf)
@@ -147,15 +194,30 @@ async def cb_edit_title_start(callback: CallbackQuery, callback_data: DocAdminCB
 
 @router.message(DocumentEdit.entering_title, F.text)
 async def edit_title_save(message: Message, state: FSMContext, session: AsyncSession) -> None:
+    title = " ".join(message.text.split())
+    if not title:
+        await message.answer("⚠️ Название не может быть пустым.")
+        return
+    if len(title) > MAX_DOCUMENT_TITLE_LENGTH:
+        await message.answer(
+            f"⚠️ Название слишком длинное. Максимум — {MAX_DOCUMENT_TITLE_LENGTH} символов."
+        )
+        return
     data = await state.get_data()
-    document = await crud.update_document(session, data["doc_id"], title=message.text.strip())
+    document = await crud.update_document(session, data["doc_id"], title=title)
     await state.clear()
     if document:
         await message.answer(
-            f"✅ Название обновлено.\n\n📄 <b>{document.title}</b>\n\n{document.description or '—'}",
+            f"✅ Название обновлено.\n\n📄 <b>{escape_html(document.title)}</b>\n\n"
+            f"{escape_html(document.description or '—')}",
             reply_markup=doc_detail_admin_kb(document.id),
             parse_mode="HTML",
         )
+
+
+@router.message(DocumentEdit.entering_title)
+async def edit_title_wrong_type(message: Message) -> None:
+    await message.answer("⚠️ Отправьте новое название обычным текстом.")
 
 
 @router.callback_query(DocAdminCB.filter(F.action == "edit_desc"))
@@ -168,15 +230,33 @@ async def cb_edit_desc_start(callback: CallbackQuery, callback_data: DocAdminCB,
 
 @router.message(DocumentEdit.entering_description, F.text)
 async def edit_desc_save(message: Message, state: FSMContext, session: AsyncSession) -> None:
+    description = message.text.strip()
+    if description == "-":
+        description = None
+    elif not description:
+        await message.answer("⚠️ Отправьте описание или «-», чтобы удалить его.")
+        return
+    elif len(description) > MAX_DOCUMENT_DESCRIPTION_LENGTH:
+        await message.answer(
+            "⚠️ Описание слишком длинное. Максимум — "
+            f"{MAX_DOCUMENT_DESCRIPTION_LENGTH} символов."
+        )
+        return
     data = await state.get_data()
-    document = await crud.update_document(session, data["doc_id"], description=message.text.strip())
+    document = await crud.update_document(session, data["doc_id"], description=description)
     await state.clear()
     if document:
         await message.answer(
-            f"✅ Описание обновлено.\n\n📄 <b>{document.title}</b>\n\n{document.description or '—'}",
+            f"✅ Описание обновлено.\n\n📄 <b>{escape_html(document.title)}</b>\n\n"
+            f"{escape_html(document.description or '—')}",
             reply_markup=doc_detail_admin_kb(document.id),
             parse_mode="HTML",
         )
+
+
+@router.message(DocumentEdit.entering_description)
+async def edit_description_wrong_type(message: Message) -> None:
+    await message.answer("⚠️ Отправьте новое описание обычным текстом или «-».")
 
 
 @router.callback_query(DocAdminCB.filter(F.action == "edit_file"))
@@ -194,11 +274,17 @@ async def edit_file_save(message: Message, state: FSMContext, session: AsyncSess
         await message.answer("⚠️ Пожалуйста, загрузите файл в формате PDF.")
         return
     data = await state.get_data()
-    document = await crud.update_document(session, data["doc_id"], file_id=doc.file_id, file_name=doc.file_name)
+    file_name = (doc.file_name or "document.pdf")[:255]
+    document = await crud.update_document(
+        session,
+        data["doc_id"],
+        file_id=doc.file_id,
+        file_name=file_name,
+    )
     await state.clear()
     if document:
         await message.answer(
-            f"✅ Файл документа обновлён.\n\n📄 <b>{document.title}</b>",
+            f"✅ Файл документа обновлён.\n\n📄 <b>{escape_html(document.title)}</b>",
             reply_markup=doc_detail_admin_kb(document.id),
             parse_mode="HTML",
         )

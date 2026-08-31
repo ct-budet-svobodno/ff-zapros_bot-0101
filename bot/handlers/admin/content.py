@@ -17,6 +17,7 @@ from keyboards.admin_kb import section_detail_kb, section_preview_kb, sections_l
 from states.states import SectionEdit
 from utils.admin_filter import IsAdmin
 from utils.callback_data import AdminMenuCB, SectionCB, SectionPreviewCB
+from utils.formatting import escape_html
 
 router = Router(name="admin_content_sections")
 router.message.filter(IsAdmin())
@@ -28,6 +29,7 @@ SECTION_KEYS = [
     ("council_info", "О Студенческом совете"),
     ("council_selection", "Отбор в Студенческий совет"),
 ]
+MAX_SECTION_LENGTH = 3800
 
 
 @router.callback_query(AdminMenuCB.filter(F.target == "content_sections"))
@@ -57,7 +59,7 @@ async def cb_section_view(callback: CallbackQuery, callback_data: SectionCB, ses
         await callback.answer("Раздел не найден.", show_alert=True)
         return
     await callback.message.edit_text(
-        f"📖 <b>{section.title}</b>\n\n{section.body}",
+        f"📖 <b>{escape_html(section.title)}</b>\n\n{escape_html(section.body)}",
         reply_markup=section_detail_kb(section.key),
         parse_mode="HTML",
     )
@@ -83,12 +85,18 @@ async def section_edit_receive_text(message: Message, state: FSMContext) -> None
     if not text:
         await message.answer("Текст не может быть пустым. Отправьте текст раздела.")
         return
+    if len(text) > MAX_SECTION_LENGTH:
+        await message.answer(
+            f"⚠️ Текст слишком длинный. Максимум — {MAX_SECTION_LENGTH} символов."
+        )
+        return
     await state.update_data(new_body=text)
     await state.set_state(SectionEdit.preview)
     data = await state.get_data()
     await message.answer(
-        f"Предпросмотр:\n\n{text}",
+        f"Предпросмотр:\n\n{escape_html(text)}",
         reply_markup=section_preview_kb(data["section_key"]),
+        parse_mode="HTML",
     )
 
 
@@ -113,8 +121,9 @@ async def section_edit_save(
     await state.clear()
     if section:
         await callback.message.edit_text(
-            f"✅ Раздел «{section.title}» обновлён.",
+            f"✅ Раздел «{escape_html(section.title)}» обновлён.",
             reply_markup=section_detail_kb(section.key),
+            parse_mode="HTML",
         )
     else:
         await callback.message.edit_text("⚠️ Не удалось сохранить изменения — раздел не найден.")

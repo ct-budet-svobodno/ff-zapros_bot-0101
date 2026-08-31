@@ -68,5 +68,5 @@ def author_label(request: Request, username: str | None, full_name: str | None) 
     if request.is_anonymous:
         return "🕶 Анонимное обращение"
     if username:
-        return f"👤 @{username}"
-    return f"👤 {full_name or 'Без имени'}"
+        return f"👤 @{escape_html(username)}"
+    return f"👤 {escape_html(full_name or 'Без имени')}"

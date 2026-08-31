@@ -22,6 +22,7 @@ from keyboards.admin_kb import (
 from states.states import CouncilLeaderEditForm, CouncilLeaderForm
 from utils.admin_filter import IsAdmin
 from utils.callback_data import AdminMenuCB, FormControlCB, LeaderAdminCB
+from utils.formatting import escape_html
 
 router = Router(name="admin_leaders")
 router.message.filter(IsAdmin())
@@ -32,12 +33,18 @@ FIELD_LABELS = {
     "position": "должность",
     "telegram_username": "Telegram username",
 }
+FIELD_MAX_LENGTHS = {
+    "full_name": 200,
+    "position": 250,
+    "telegram_username": 64,
+}
 
 
 def _detail_text(leader) -> str:
     return (
-        f"👤 <b>{leader.full_name}</b>\n{leader.position}\n"
-        f"Telegram: @{leader.telegram_username or '—'}\n"
+        f"👤 <b>{escape_html(leader.full_name)}</b>\n"
+        f"{escape_html(leader.position)}\n"
+        f"Telegram: @{escape_html(leader.telegram_username or '—')}\n"
         f"Фото: {'есть' if leader.photo_file_id else 'нет'}\n"
         f"Видимость: {'👁 показывается студентам' if leader.is_active else '🚫 скрыто от студентов'}"
     )
@@ -125,11 +132,19 @@ async def cb_edit_menu(callback: CallbackQuery, callback_data: LeaderAdminCB, se
     if not leader:
         await callback.answer("Не найдено.", show_alert=True)
         return
-    text = f"✏️ Что изменить у «{leader.full_name}»?"
+    text = f"✏️ Что изменить у «{escape_html(leader.full_name)}»?"
     if callback.message.photo:
-        await callback.message.edit_caption(caption=text, reply_markup=leader_edit_menu_kb(leader))
+        await callback.message.edit_caption(
+            caption=text,
+            reply_markup=leader_edit_menu_kb(leader),
+            parse_mode="HTML",
+        )
     else:
-        await callback.message.edit_text(text, reply_markup=leader_edit_menu_kb(leader))
+        await callback.message.edit_text(
+            text,
+            reply_markup=leader_edit_menu_kb(leader),
+            parse_mode="HTML",
+        )
     await callback.answer()
 
 
@@ -174,10 +189,18 @@ async def edit_field_receive_text(message: Message, state: FSMContext) -> None:
     if not value:
         await message.answer("Значение не может быть пустым.")
         return
+    max_length = FIELD_MAX_LENGTHS[data["field"]]
+    if len(value) > max_length:
+        await message.answer(f"⚠️ Максимум — {max_length} символов.")
+        return
     await state.update_data(new_value=value)
     await state.set_state(CouncilLeaderEditForm.preview)
     label = FIELD_LABELS.get(data["field"], data["field"])
-    await message.answer(f"Предпросмотр — {label}:\n\n{value}", reply_markup=form_preview_kb())
+    await message.answer(
+        f"Предпросмотр — {label}:\n\n{escape_html(value)}",
+        reply_markup=form_preview_kb(),
+        parse_mode="HTML",
+    )
 
 
 @router.message(CouncilLeaderEditForm.entering_value, F.photo)
@@ -236,14 +259,22 @@ async def cb_add_start(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(CouncilLeaderForm.entering_full_name, F.text)
 async def add_full_name(message: Message, state: FSMContext) -> None:
-    await state.update_data(full_name=message.text.strip())
+    full_name = message.text.strip()
+    if not full_name or len(full_name) > FIELD_MAX_LENGTHS["full_name"]:
+        await message.answer("⚠️ Укажите ФИО длиной до 200 символов.")
+        return
+    await state.update_data(full_name=full_name)
     await state.set_state(CouncilLeaderForm.entering_position)
     await message.answer("Введите должность:", reply_markup=form_control_kb())
 
 
 @router.message(CouncilLeaderForm.entering_position, F.text)
 async def add_position(message: Message, state: FSMContext) -> None:
-    await state.update_data(position=message.text.strip())
+    position = message.text.strip()
+    if not position or len(position) > FIELD_MAX_LENGTHS["position"]:
+        await message.answer("⚠️ Укажите должность длиной до 250 символов.")
+        return
+    await state.update_data(position=position)
     await state.set_state(CouncilLeaderForm.entering_username)
     await message.answer(
         "Введите Telegram username без «@» или «-», если пропустить:", reply_markup=form_control_kb()
@@ -253,6 +284,9 @@ async def add_position(message: Message, state: FSMContext) -> None:
 @router.message(CouncilLeaderForm.entering_username, F.text)
 async def add_username(message: Message, state: FSMContext) -> None:
     username = None if message.text.strip() == "-" else message.text.strip().lstrip("@")
+    if username and (len(username) > FIELD_MAX_LENGTHS["telegram_username"] or " " in username):
+        await message.answer("⚠️ Введите корректный username без «@» или «-».")
+        return
     await state.update_data(telegram_username=username)
     await state.set_state(CouncilLeaderForm.entering_photo)
     await message.answer("Отправьте фото или «-», если без фото:", reply_markup=form_control_kb())
@@ -280,11 +314,11 @@ async def _show_preview(message: Message, state: FSMContext) -> None:
     await state.set_state(CouncilLeaderForm.preview)
     text = (
         "Предпросмотр:\n\n"
-        f"👤 {data['full_name']}\n{data['position']}\n"
-        f"Telegram: @{data.get('telegram_username') or '—'}\n"
+        f"👤 {escape_html(data['full_name'])}\n{escape_html(data['position'])}\n"
+        f"Telegram: @{escape_html(data.get('telegram_username') or '—')}\n"
         f"Фото: {'да' if data.get('photo_file_id') else 'нет'}"
     )
-    await message.answer(text, reply_markup=form_preview_kb())
+    await message.answer(text, reply_markup=form_preview_kb(), parse_mode="HTML")
 
 
 @router.callback_query(CouncilLeaderForm.preview, FormControlCB.filter(F.action == "save"))

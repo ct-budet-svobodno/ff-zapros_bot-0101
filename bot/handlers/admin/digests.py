@@ -10,10 +10,15 @@ from keyboards.admin_kb import digest_detail_admin_kb, digests_list_admin_kb, fo
 from states.states import DigestEdit, DigestForm
 from utils.admin_filter import IsAdmin
 from utils.callback_data import AdminMenuCB, DigestAdminCB, FormControlCB
+from utils.formatting import escape_html
 
 router = Router(name="admin_digests")
 router.message.filter(IsAdmin())
 router.callback_query.filter(IsAdmin())
+
+MAX_DIGEST_MONTH_LENGTH = 32
+MAX_DIGEST_TITLE_LENGTH = 200
+MAX_DIGEST_TEXT_LENGTH = 3500
 
 
 @router.callback_query(AdminMenuCB.filter(F.target == "digests"))
@@ -35,7 +40,10 @@ async def cb_view(callback: CallbackQuery, callback_data: DigestAdminCB, session
     if not digest:
         await callback.answer("Не найдено.", show_alert=True)
         return
-    text = f"📅 <b>{digest.title}</b> ({digest.month_label})\n\n{digest.text}"
+    text = (
+        f"📅 <b>{escape_html(digest.title)}</b> "
+        f"({escape_html(digest.month_label)})\n\n{escape_html(digest.text)}"
+    )
     await callback.message.edit_text(text, reply_markup=digest_detail_admin_kb(digest.id), parse_mode="HTML")
     await callback.answer()
 
@@ -77,7 +85,8 @@ async def cb_form_cancel(callback: CallbackQuery, state: FSMContext, session: As
         digest = await crud.get_digest(session, data.get("digest_id"))
         if digest:
             await callback.message.edit_text(
-                f"📅 <b>{digest.title}</b> ({digest.month_label})\n\n{digest.text}",
+                f"📅 <b>{escape_html(digest.title)}</b> "
+                f"({escape_html(digest.month_label)})\n\n{escape_html(digest.text)}",
                 reply_markup=digest_detail_admin_kb(digest.id),
                 parse_mode="HTML",
             )
@@ -86,25 +95,45 @@ async def cb_form_cancel(callback: CallbackQuery, state: FSMContext, session: As
 
 @router.message(DigestForm.entering_month, F.text)
 async def add_month(message: Message, state: FSMContext) -> None:
-    await state.update_data(month_label=message.text.strip())
+    month = message.text.strip()
+    if not month or len(month) > MAX_DIGEST_MONTH_LENGTH:
+        await message.answer("⚠️ Укажите месяц длиной до 32 символов.")
+        return
+    await state.update_data(month_label=month)
     await state.set_state(DigestForm.entering_title)
     await message.answer("Введите заголовок дайджеста:", reply_markup=form_control_kb())
 
 
 @router.message(DigestForm.entering_title, F.text)
 async def add_title(message: Message, state: FSMContext) -> None:
-    await state.update_data(title=message.text.strip())
+    title = message.text.strip()
+    if not title or len(title) > MAX_DIGEST_TITLE_LENGTH:
+        await message.answer("⚠️ Укажите заголовок длиной до 200 символов.")
+        return
+    await state.update_data(title=title)
     await state.set_state(DigestForm.entering_text)
     await message.answer("Введите текст дайджеста:", reply_markup=form_control_kb())
 
 
 @router.message(DigestForm.entering_text, F.text)
 async def add_text(message: Message, state: FSMContext) -> None:
-    await state.update_data(text=message.text.strip())
+    digest_text = message.text.strip()
+    if not digest_text:
+        await message.answer("⚠️ Текст дайджеста не может быть пустым.")
+        return
+    if len(digest_text) > MAX_DIGEST_TEXT_LENGTH:
+        await message.answer(
+            f"⚠️ Текст слишком длинный. Максимум — {MAX_DIGEST_TEXT_LENGTH} символов."
+        )
+        return
+    await state.update_data(text=digest_text)
     await state.set_state(DigestForm.preview)
     data = await state.get_data()
-    preview = f"Предпросмотр:\n\n📅 {data['title']} ({data['month_label']})\n\n{data['text']}"
-    await message.answer(preview, reply_markup=form_preview_kb())
+    preview = (
+        f"Предпросмотр:\n\n📅 {escape_html(data['title'])} "
+        f"({escape_html(data['month_label'])})\n\n{escape_html(data['text'])}"
+    )
+    await message.answer(preview, reply_markup=form_preview_kb(), parse_mode="HTML")
 
 
 @router.callback_query(DigestForm.preview, FormControlCB.filter(F.action == "save"))
@@ -129,9 +158,22 @@ async def cb_edit_start(callback: CallbackQuery, callback_data: DigestAdminCB, s
 
 @router.message(DigestEdit.entering_text, F.text)
 async def edit_text_receive(message: Message, state: FSMContext) -> None:
-    await state.update_data(new_text=message.text.strip())
+    digest_text = message.text.strip()
+    if not digest_text:
+        await message.answer("⚠️ Текст дайджеста не может быть пустым.")
+        return
+    if len(digest_text) > MAX_DIGEST_TEXT_LENGTH:
+        await message.answer(
+            f"⚠️ Текст слишком длинный. Максимум — {MAX_DIGEST_TEXT_LENGTH} символов."
+        )
+        return
+    await state.update_data(new_text=digest_text)
     await state.set_state(DigestEdit.preview)
-    await message.answer(f"Предпросмотр:\n\n{message.text.strip()}", reply_markup=form_preview_kb())
+    await message.answer(
+        f"Предпросмотр:\n\n{escape_html(digest_text)}",
+        reply_markup=form_preview_kb(),
+        parse_mode="HTML",
+    )
 
 
 @router.callback_query(DigestEdit.preview, FormControlCB.filter(F.action == "save"))
@@ -141,7 +183,9 @@ async def edit_text_save(callback: CallbackQuery, state: FSMContext, session: As
     await state.clear()
     if digest:
         await callback.message.edit_text(
-            f"✅ Дайджест обновлён.\n\n📅 {digest.title} ({digest.month_label})\n\n{digest.text}",
+            f"✅ Дайджест обновлён.\n\n📅 {escape_html(digest.title)} "
+            f"({escape_html(digest.month_label)})\n\n{escape_html(digest.text)}",
             reply_markup=digest_detail_admin_kb(digest.id),
+            parse_mode="HTML",
         )
     await callback.answer()

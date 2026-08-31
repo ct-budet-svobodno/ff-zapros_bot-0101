@@ -17,6 +17,13 @@ BTN_DOCS = "📚 Документация"
 BTN_ASK = "📨 Задать вопрос"
 
 
+def short_button_text(text: str, max_length: int = 60) -> str:
+    """Обрезать динамическую подпись до безопасной длины Telegram-кнопки."""
+    if len(text) <= max_length:
+        return text
+    return f"{text[:max_length - 1]}…"
+
+
 def main_menu_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[

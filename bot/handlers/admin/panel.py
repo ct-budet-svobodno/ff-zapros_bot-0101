@@ -51,7 +51,8 @@ async def cb_requests_menu(callback: CallbackQuery, state: FSMContext, session: 
     stats = await crud.get_requests_stats(session)
     text = (
         "📨 <b>Обращения студентов</b>\n\n"
-        "Новые обращения приходят в рабочую группу с кнопкой «💬 Ответить».\n\n"
+        "Новые обращения приходят в рабочую тему. Для ответа используйте "
+        "обычный Telegram Reply на карточку обращения.\n\n"
         f"Всего обращений: {stats['total']}\n"
         f"🆕 Новых: {stats['new']}\n"
         f"🔄 В работе: {stats['in_progress']}\n"

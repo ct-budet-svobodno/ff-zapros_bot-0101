@@ -23,6 +23,7 @@ from keyboards.admin_kb import (
 from states.states import FacultyAdminEditForm, FacultyAdminForm
 from utils.admin_filter import IsAdmin
 from utils.callback_data import AdminMenuCB, FacultyAdminCB, FormControlCB
+from utils.formatting import escape_html
 
 router = Router(name="admin_faculty_admins")
 router.message.filter(IsAdmin())
@@ -33,13 +34,18 @@ FIELD_LABELS = {
     "position": "должность",
     "contact_info": "контакты",
 }
+FIELD_MAX_LENGTHS = {
+    "full_name": 200,
+    "position": 250,
+    "contact_info": 500,
+}
 
 
 def _detail_text(person) -> str:
     return (
-        f"👤 <b>{person.full_name}</b>\n"
-        f"{person.position}\n\n"
-        f"Контакты: {person.contact_info or '—'}\n"
+        f"👤 <b>{escape_html(person.full_name)}</b>\n"
+        f"{escape_html(person.position)}\n\n"
+        f"Контакты: {escape_html(person.contact_info or '—')}\n"
         f"Фото: {'есть' if person.photo_file_id else 'нет'}\n"
         f"Видимость: {'👁 показывается студентам' if person.is_active else '🚫 скрыто от студентов'}"
     )
@@ -132,11 +138,19 @@ async def cb_edit_menu(callback: CallbackQuery, callback_data: FacultyAdminCB, s
     if not person:
         await callback.answer("Не найдено.", show_alert=True)
         return
-    text = f"✏️ Что изменить у «{person.full_name}»?"
+    text = f"✏️ Что изменить у «{escape_html(person.full_name)}»?"
     if callback.message.photo:
-        await callback.message.edit_caption(caption=text, reply_markup=fadmin_edit_menu_kb(person))
+        await callback.message.edit_caption(
+            caption=text,
+            reply_markup=fadmin_edit_menu_kb(person),
+            parse_mode="HTML",
+        )
     else:
-        await callback.message.edit_text(text, reply_markup=fadmin_edit_menu_kb(person))
+        await callback.message.edit_text(
+            text,
+            reply_markup=fadmin_edit_menu_kb(person),
+            parse_mode="HTML",
+        )
     await callback.answer()
 
 
@@ -177,10 +191,18 @@ async def edit_field_receive_text(message: Message, state: FSMContext) -> None:
     if not value:
         await message.answer("Значение не может быть пустым.")
         return
+    max_length = FIELD_MAX_LENGTHS[data["field"]]
+    if len(value) > max_length:
+        await message.answer(f"⚠️ Максимум — {max_length} символов.")
+        return
     await state.update_data(new_value=value)
     await state.set_state(FacultyAdminEditForm.preview)
     label = FIELD_LABELS.get(data["field"], data["field"])
-    await message.answer(f"Предпросмотр — {label}:\n\n{value}", reply_markup=form_preview_kb())
+    await message.answer(
+        f"Предпросмотр — {label}:\n\n{escape_html(value)}",
+        reply_markup=form_preview_kb(),
+        parse_mode="HTML",
+    )
 
 
 @router.message(FacultyAdminEditForm.entering_value, F.photo)
@@ -239,14 +261,22 @@ async def cb_add_start(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(FacultyAdminForm.entering_full_name, F.text)
 async def add_full_name(message: Message, state: FSMContext) -> None:
-    await state.update_data(full_name=message.text.strip())
+    full_name = message.text.strip()
+    if not full_name or len(full_name) > FIELD_MAX_LENGTHS["full_name"]:
+        await message.answer("⚠️ Укажите ФИО длиной до 200 символов.")
+        return
+    await state.update_data(full_name=full_name)
     await state.set_state(FacultyAdminForm.entering_position)
     await message.answer("Введите должность:", reply_markup=form_control_kb())
 
 
 @router.message(FacultyAdminForm.entering_position, F.text)
 async def add_position(message: Message, state: FSMContext) -> None:
-    await state.update_data(position=message.text.strip())
+    position = message.text.strip()
+    if not position or len(position) > FIELD_MAX_LENGTHS["position"]:
+        await message.answer("⚠️ Укажите должность длиной до 250 символов.")
+        return
+    await state.update_data(position=position)
     await state.set_state(FacultyAdminForm.entering_contact)
     await message.answer(
         "Введите контактную информацию (email/телефон/ссылку) или отправьте «-», если пропустить:",
@@ -257,6 +287,9 @@ async def add_position(message: Message, state: FSMContext) -> None:
 @router.message(FacultyAdminForm.entering_contact, F.text)
 async def add_contact(message: Message, state: FSMContext) -> None:
     contact = None if message.text.strip() == "-" else message.text.strip()
+    if contact and len(contact) > FIELD_MAX_LENGTHS["contact_info"]:
+        await message.answer("⚠️ Контактная информация не должна превышать 500 символов.")
+        return
     await state.update_data(contact_info=contact)
     await state.set_state(FacultyAdminForm.entering_photo)
     await message.answer(
@@ -288,12 +321,12 @@ async def _show_add_preview(message: Message, state: FSMContext) -> None:
     await state.set_state(FacultyAdminForm.preview)
     text = (
         "Предпросмотр:\n\n"
-        f"👤 {data['full_name']}\n"
-        f"{data['position']}\n"
-        f"Контакты: {data.get('contact_info') or '—'}\n"
+        f"👤 {escape_html(data['full_name'])}\n"
+        f"{escape_html(data['position'])}\n"
+        f"Контакты: {escape_html(data.get('contact_info') or '—')}\n"
         f"Фото: {'да' if data.get('photo_file_id') else 'нет'}"
     )
-    await message.answer(text, reply_markup=form_preview_kb())
+    await message.answer(text, reply_markup=form_preview_kb(), parse_mode="HTML")
 
 
 @router.callback_query(FacultyAdminForm.preview, FormControlCB.filter(F.action == "save"))

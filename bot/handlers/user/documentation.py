@@ -7,6 +7,7 @@ from database import crud
 from keyboards.common_kb import BTN_DOCS
 from keyboards.user_kb import documentation_kb
 from utils.callback_data import DocItemCB, MenuCB
+from utils.formatting import escape_html
 
 router = Router(name="user_documentation")
 router.message.filter(F.chat.type == "private")
@@ -44,9 +45,9 @@ async def cb_doc_item(callback: CallbackQuery, callback_data: DocItemCB, session
     if not document:
         await callback.answer("Документ не найден.", show_alert=True)
         return
-    caption = document.title
+    caption = escape_html(document.title)
     if document.description:
-        caption += f"\n\n{document.description}"
+        caption += f"\n\n{escape_html(document.description)}"
     try:
         await callback.message.answer_document(document=document.file_id, caption=caption)
     except TelegramAPIError:

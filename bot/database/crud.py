@@ -192,11 +192,26 @@ async def delete_faculty_admin(session: AsyncSession, person_id: int) -> bool:
 # Студенческие организации
 # --------------------------------------------------------------------------
 
-async def list_org_categories(session: AsyncSession) -> list[str]:
-    result = await session.scalars(
-        select(StudentOrganization.category).distinct().order_by(StudentOrganization.category)
+async def list_org_category_representatives(
+    session: AsyncSession,
+    only_active: bool = True,
+) -> list[StudentOrganization]:
+    """Вернуть по одной записи на категорию для компактных callback-кнопок.
+
+    Название категории нельзя помещать в callback_data: Telegram ограничивает
+    его 64 байтами, а русские названия быстро превышают этот лимит.
+    """
+    stmt = select(StudentOrganization).order_by(
+        StudentOrganization.category,
+        StudentOrganization.id,
     )
-    return list(result.all())
+    if only_active:
+        stmt = stmt.where(StudentOrganization.is_active.is_(True))
+    result = await session.scalars(stmt)
+    representatives: dict[str, StudentOrganization] = {}
+    for organization in result.all():
+        representatives.setdefault(organization.category, organization)
+    return list(representatives.values())
 
 
 async def list_organizations(

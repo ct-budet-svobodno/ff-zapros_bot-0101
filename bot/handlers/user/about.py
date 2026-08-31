@@ -1,4 +1,5 @@
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,7 @@ from keyboards.user_kb import (
     org_items_kb,
 )
 from utils.callback_data import FacultyAdminCB, MenuCB, OrgCategoryCB, OrgItemCB
+from utils.formatting import escape_html
 
 router = Router(name="user_about")
 router.message.filter(F.chat.type == "private")
@@ -23,14 +25,14 @@ PLACEHOLDER_EMPTY = "Информация пока не добавлена ад�
 @router.message(F.text == BTN_ABOUT)
 async def show_about(message: Message, session: AsyncSession) -> None:
     section = await crud.get_section(session, "faculty_history")
-    text = section.body if section else PLACEHOLDER_EMPTY
+    text = escape_html(section.body) if section else PLACEHOLDER_EMPTY
     await message.answer(f"🏛 <b>О факультете</b>\n\n{text}", reply_markup=about_faculty_kb(), parse_mode="HTML")
 
 
 @router.callback_query(MenuCB.filter(F.target == "about"))
 async def cb_show_about(callback: CallbackQuery, session: AsyncSession) -> None:
     section = await crud.get_section(session, "faculty_history")
-    text = section.body if section else PLACEHOLDER_EMPTY
+    text = escape_html(section.body) if section else PLACEHOLDER_EMPTY
     await callback.message.edit_text(
         f"🏛 <b>О факультете</b>\n\n{text}", reply_markup=about_faculty_kb(), parse_mode="HTML"
     )
@@ -61,10 +63,10 @@ async def cb_faculty_admin_detail(callback: CallbackQuery, callback_data: Facult
     if not person:
         await callback.answer("Информация не найдена.", show_alert=True)
         return
-    lines = [f"👤 <b>{person.full_name}</b>", person.position]
+    lines = [f"👤 <b>{escape_html(person.full_name)}</b>", escape_html(person.position)]
     if person.contact_info:
         lines.append("")
-        lines.append(person.contact_info)
+        lines.append(escape_html(person.contact_info))
     text = "\n".join(lines)
     if person.photo_file_id:
         await callback.message.delete()
@@ -78,7 +80,7 @@ async def cb_faculty_admin_detail(callback: CallbackQuery, callback_data: Facult
 
 @router.callback_query(MenuCB.filter(F.target == "orgs"))
 async def cb_orgs(callback: CallbackQuery, session: AsyncSession) -> None:
-    categories = await crud.list_org_categories(session)
+    categories = await crud.list_org_category_representatives(session)
     if not categories:
         await callback.message.edit_text(
             f"🤝 <b>Студенческие организации</b>\n\n{PLACEHOLDER_EMPTY}",
@@ -96,20 +98,44 @@ async def cb_orgs(callback: CallbackQuery, session: AsyncSession) -> None:
 
 @router.callback_query(OrgCategoryCB.filter())
 async def cb_org_category(callback: CallbackQuery, callback_data: OrgCategoryCB, session: AsyncSession) -> None:
-    items = await crud.list_organizations(session, category=callback_data.category)
+    representative = await crud.get_organization(session, callback_data.org_id)
+    if representative is None or not representative.is_active:
+        await callback.answer("Категория не найдена.", show_alert=True)
+        return
+    category = representative.category
+    items = await crud.list_organizations(session, category=category)
     if not items:
         await callback.message.edit_text(
-            f"🤝 <b>{callback_data.category}</b>\n\n{PLACEHOLDER_EMPTY}",
-            reply_markup=org_items_kb([], callback_data.category),
+            f"🤝 <b>{escape_html(category)}</b>\n\n{PLACEHOLDER_EMPTY}",
+            reply_markup=org_items_kb([]),
             parse_mode="HTML",
         )
     else:
         await callback.message.edit_text(
-            f"🤝 <b>{callback_data.category}</b>\n\nВыберите организацию:",
-            reply_markup=org_items_kb(items, callback_data.category),
+            f"🤝 <b>{escape_html(category)}</b>\n\nВыберите организацию:",
+            reply_markup=org_items_kb(items),
             parse_mode="HTML",
         )
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("orgcat:"))
+async def cb_legacy_org_category(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Обновить старую пользовательскую кнопку категории после деплоя."""
+    categories = await crud.list_org_category_representatives(session)
+    try:
+        await callback.message.edit_text(
+            "🤝 <b>Студенческие организации</b>\n\n"
+            "Кнопки обновлены. Выберите категорию:",
+            reply_markup=org_categories_kb(categories),
+            parse_mode="HTML",
+        )
+        answer_text = "Меню обновлено"
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc):
+            raise
+        answer_text = "Меню уже обновлено"
+    await callback.answer(answer_text)
 
 
 @router.callback_query(OrgItemCB.filter())
@@ -118,6 +144,9 @@ async def cb_org_item(callback: CallbackQuery, callback_data: OrgItemCB, session
     if not org:
         await callback.answer("Организация не найдена.", show_alert=True)
         return
-    text = f"🤝 <b>{org.name}</b>\n\n{org.description or PLACEHOLDER_EMPTY}"
+    text = (
+        f"🤝 <b>{escape_html(org.name)}</b>\n\n"
+        f"{escape_html(org.description or PLACEHOLDER_EMPTY)}"
+    )
     await callback.message.edit_text(text, reply_markup=org_item_detail_kb(org), parse_mode="HTML")
     await callback.answer()
