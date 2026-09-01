@@ -15,6 +15,7 @@ from utils.callback_data import (
     OrgItemCB,
     RequestPreviewCB,
 )
+from utils.formatting import leader_position_button_text
 
 
 def about_faculty_kb() -> InlineKeyboardMarkup:
@@ -72,7 +73,8 @@ def council_menu_kb() -> InlineKeyboardMarkup:
 
 def leaders_kb(leaders: list[CouncilLeader]) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(
-        text=short_button_text(l.position), callback_data=LeaderAdminCB(action="view", leader_id=l.id).pack()
+        text=short_button_text(leader_position_button_text(l.position)),
+        callback_data=LeaderAdminCB(action="view", leader_id=l.id).pack(),
     )] for l in leaders]
     return kb_with_nav(rows, back_target="council")
 

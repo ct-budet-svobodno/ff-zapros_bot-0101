@@ -75,14 +75,27 @@ CONTENT_SECTIONS = [
 
 COUNCIL_LEADERS = [
     ("Шишкова Алина", "Председатель", "yourfloret", 0),
-    ("Летуновская Екатерина", "Первый Заместитель Председателя", "katrina007_0", 1),
+    ("Летуновская Екатерина", "Первый заместитель", "katrina007_0", 1),
     ("Беляева Анастасия", "Секретарь", "atnnasy", 2),
-    ("Мазур Елизавета", "Заместитель председателя по Проектной деятельности", "dwimddd", 3),
-    ("Андреев Сергей", "Заместитель председателя по Учебно-Социальной деятельности", "foxssert", 4),
-    ("Ефимов Мирон", "Руководитель Направления Внешних Связей", "mironefimov", 5),
-    ("Дорохина Варвара", "Руководитель Информационного Направления", "ghtbrn", 6),
-    ("Семенов Дмитрий", "Руководитель Направления Развития и Корпоративной Культуры", "preciouslittlediamondd", 7),
+    ("Мазур Елизавета", "Зам по проектной деятельности", "dwimddd", 3),
+    ("Андреев Сергей", "Зам по уч-соц деятельности", "foxssert", 4),
+    ("Ефимов Мирон", "Руководитель направления внешних связей (НВС)", "mironefimov", 5),
+    ("Дорохина Варвара", "Руководитель информационного направления", "ghtbrn", 6),
+    ("Семенов Дмитрий", "Руководитель направления развития и корпоративной культуры (НРКК)", "preciouslittlediamondd", 7),
 ]
+
+LEGACY_COUNCIL_LEADER_POSITIONS = {
+    "yourfloret": "Председатель",
+    "katrina007_0": "Первый Заместитель Председателя",
+    "atnnasy": "Секретарь",
+    "dwimddd": "Заместитель председателя по Проектной деятельности",
+    "foxssert": "Заместитель председателя по Учебно-Социальной деятельности",
+    "mironefimov": "Руководитель Направления Внешних Связей",
+    "ghtbrn": "Руководитель Информационного Направления",
+    "preciouslittlediamondd": (
+        "Руководитель Направления Развития и Корпоративной Культуры"
+    ),
+}
 
 # Комитеты прямо перечислены в ТЗ (расшифровку названий и описание
 # заказчик предоставит позже — контент не придумываем).
@@ -143,15 +156,25 @@ async def seed_council_leaders(session) -> None:
     existing_leaders = list(await session.scalars(select(CouncilLeader)))
     if existing_leaders:
         # Порядок хранится в БД, поэтому обновляем его и для уже запущенных
-        # установок. Остальные данные, которые администратор мог изменить,
-        # не затрагиваются.
+        # установок. Старые стандартные названия должностей также заменяем,
+        # но введённый администратором произвольный текст не трогаем.
         order_by_username = {
             username: order
             for _, _, username, order in COUNCIL_LEADERS
         }
+        position_by_username = {
+            username: position
+            for _, position, username, _ in COUNCIL_LEADERS
+        }
         for leader in existing_leaders:
             if leader.telegram_username in order_by_username:
                 leader.sort_order = order_by_username[leader.telegram_username]
+            if (
+                leader.telegram_username in LEGACY_COUNCIL_LEADER_POSITIONS
+                and leader.position
+                == LEGACY_COUNCIL_LEADER_POSITIONS[leader.telegram_username]
+            ):
+                leader.position = position_by_username[leader.telegram_username]
         return
     for full_name, position, username, order in COUNCIL_LEADERS:
         session.add(

@@ -22,7 +22,7 @@ from keyboards.admin_kb import (
 from states.states import CouncilLeaderEditForm, CouncilLeaderForm
 from utils.admin_filter import IsAdmin
 from utils.callback_data import AdminMenuCB, FormControlCB, LeaderAdminCB
-from utils.formatting import escape_html
+from utils.formatting import escape_html, leader_position_detail_text
 
 router = Router(name="admin_leaders")
 router.message.filter(IsAdmin())
@@ -43,7 +43,7 @@ FIELD_MAX_LENGTHS = {
 def _detail_text(leader) -> str:
     return (
         f"👤 <b>{escape_html(leader.full_name)}</b>\n"
-        f"{escape_html(leader.position)}\n"
+        f"{escape_html(leader_position_detail_text(leader.position))}\n"
         f"Telegram: @{escape_html(leader.telegram_username or '—')}\n"
         f"Фото: {'есть' if leader.photo_file_id else 'нет'}\n"
         f"Видимость: {'👁 показывается студентам' if leader.is_active else '🚫 скрыто от студентов'}"

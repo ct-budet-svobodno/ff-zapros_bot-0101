@@ -26,6 +26,48 @@ def escape_html(text: str) -> str:
     )
 
 
+def leader_position_button_text(position: str) -> str:
+    """Короткая должность для кнопки списка руководителей."""
+    normalized = position.casefold().replace("ё", "е")
+    if "перв" in normalized and "замест" in normalized:
+        return "Первый заместитель"
+    if "проектн" in normalized and ("зам" in normalized or "замест" in normalized):
+        return "Зам по проектной деятельности"
+    if (
+        ("учебно-социальн" in normalized or "уч-соц" in normalized)
+        and ("зам" in normalized or "замест" in normalized)
+    ):
+        return "Зам по уч-соц деятельности"
+    if ("внешн" in normalized and "связ" in normalized) or "нвс" in normalized:
+        return "Руководитель НВС"
+    if "информационн" in normalized and "направлен" in normalized:
+        return "Руководитель информа"
+    if (
+        ("развит" in normalized and "корпоративн" in normalized)
+        or "нркк" in normalized
+    ):
+        return "Руководитель НРКК"
+    return position
+
+
+def leader_position_detail_text(position: str) -> str:
+    """Полная расшифровка сокращённых направлений в карточке."""
+    normalized = position.casefold().replace("ё", "е")
+    if ("внешн" in normalized and "связ" in normalized) or "нвс" in normalized:
+        return "Руководитель направления внешних связей (НВС)"
+    if "информационн" in normalized or "руководитель информа" in normalized:
+        return "Руководитель информационного направления"
+    if (
+        ("развит" in normalized and "корпоративн" in normalized)
+        or "нркк" in normalized
+    ):
+        return (
+            "Руководитель направления развития и корпоративной культуры "
+            "(НРКК)"
+        )
+    return leader_position_button_text(position)
+
+
 def request_preview_text(is_anonymous: bool, course: str, building: str, question: str) -> str:
     anon_label = "🕶 Анонимно" if is_anonymous else "👤 Не анонимно"
     return (

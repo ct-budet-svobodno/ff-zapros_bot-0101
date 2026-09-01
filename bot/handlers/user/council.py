@@ -6,7 +6,7 @@ from database import crud
 from keyboards.common_kb import BTN_COUNCIL
 from keyboards.user_kb import council_menu_kb, digests_kb, leaders_kb, media_kb
 from utils.callback_data import DigestItemCB, LeaderAdminCB, MenuCB
-from utils.formatting import escape_html
+from utils.formatting import escape_html, leader_position_detail_text
 
 router = Router(name="user_council")
 router.message.filter(F.chat.type == "private")
@@ -56,7 +56,10 @@ async def cb_leader_detail(callback: CallbackQuery, callback_data: LeaderAdminCB
     if not leader:
         await callback.answer("Информация не найдена.", show_alert=True)
         return
-    lines = [f"👤 <b>{escape_html(leader.full_name)}</b>", escape_html(leader.position)]
+    lines = [
+        f"👤 <b>{escape_html(leader.full_name)}</b>",
+        escape_html(leader_position_detail_text(leader.position)),
+    ]
     if leader.telegram_username:
         lines.append(f"Telegram: @{escape_html(leader.telegram_username)}")
     text = "\n".join(lines)
