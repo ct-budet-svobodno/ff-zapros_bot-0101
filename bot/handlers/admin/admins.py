@@ -1,11 +1,4 @@
-"""
-Управление администраторами бота (пункт 4 ревью): список, добавление по
-Telegram ID, удаление. Все администраторы имеют одинаковые права — ролей
-superadmin/admin/moderator нет и не предполагается.
-
-Защита: crud.delete_admin никогда не позволяет удалить последнего
-администратора (проверка на уровне БД/репозитория, не только в UI).
-"""
+"""Управление обычными администраторами, доступное только суперадмину."""
 from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
@@ -15,20 +8,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import crud
 from keyboards.admin_kb import admin_delete_confirm_kb, admins_list_kb, form_control_kb
 from states.states import AdminManageForm
-from utils.admin_filter import IsAdmin
+from utils.admin_filter import IsSuperAdmin
 from utils.callback_data import AdminManageCB, AdminMenuCB, FormControlCB
 
 router = Router(name="admin_admins")
-router.message.filter(IsAdmin())
-router.callback_query.filter(IsAdmin())
+router.message.filter(IsSuperAdmin())
+router.callback_query.filter(IsSuperAdmin())
 
 
 def _list_text(count: int) -> str:
     return (
         "🔐 <b>Администраторы</b>\n\n"
         f"Всего администраторов: {count}\n\n"
-        "У всех администраторов одинаковые полные права. "
-        "Последнего администратора удалить нельзя."
+        "Добавлять и удалять обычных администраторов может только суперадмин. "
+        "Суперадмин защищён от удаления через бот."
     )
 
 
@@ -122,6 +115,12 @@ async def cb_delete_confirm(callback: CallbackQuery, callback_data: AdminManageC
         await callback.answer("Не найдено.", show_alert=True)
         return
     total = await crud.count_admins(session)
+    if admin.is_superadmin:
+        await callback.answer(
+            "Суперадмина нельзя удалить через бот.",
+            show_alert=True,
+        )
+        return
     if total <= 1:
         await callback.answer(
             "⚠️ Нельзя удалить последнего администратора — тогда никто не "
@@ -154,6 +153,8 @@ async def cb_delete_do(callback: CallbackQuery, callback_data: AdminManageCB, se
         text = "🗑 Администратор удалён."
     elif reason == "last_admin":
         text = "⚠️ Нельзя удалить последнего администратора."
+    elif reason == "superadmin":
+        text = "⚠️ Суперадмина нельзя удалить через бот."
     else:
         text = "Не удалось удалить — администратор не найден."
     await callback.message.edit_text(

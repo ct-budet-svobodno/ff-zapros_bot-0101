@@ -25,15 +25,21 @@ from utils.callback_data import (
 )
 
 
-def admin_main_menu_kb() -> InlineKeyboardMarkup:
+def admin_main_menu_kb(is_superadmin: bool = False) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text="📝 Управление информацией", callback_data=AdminMenuCB(target="content").pack())],
         [InlineKeyboardButton(text="📚 Управление документацией", callback_data=AdminMenuCB(target="docs").pack())],
         [InlineKeyboardButton(text="📨 Обращения студентов", callback_data=AdminMenuCB(target="requests").pack())],
         [InlineKeyboardButton(text="📅 Дайджест мероприятий", callback_data=AdminMenuCB(target="digests").pack())],
         [InlineKeyboardButton(text="👥 Руководители Студсовета", callback_data=AdminMenuCB(target="leaders").pack())],
-        [InlineKeyboardButton(text="🔐 Администраторы", callback_data=AdminMenuCB(target="admins").pack())],
     ]
+    if is_superadmin:
+        rows.append([
+            InlineKeyboardButton(
+                text="🔐 Администраторы",
+                callback_data=AdminMenuCB(target="admins").pack(),
+            )
+        ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -342,12 +348,22 @@ def admins_list_kb(admins: list, current_telegram_id: int) -> InlineKeyboardMark
         label = f"{a.telegram_id}"
         if a.username:
             label += f" (@{a.username})"
+        if a.is_superadmin:
+            label += " — суперадмин"
         if a.telegram_id == current_telegram_id:
             label += " — вы"
-        rows.append([
-            InlineKeyboardButton(text=label, callback_data="noop"),
-            InlineKeyboardButton(text="🗑", callback_data=AdminManageCB(action="delete_confirm", admin_id=a.id).pack()),
-        ])
+        row = [InlineKeyboardButton(text=label, callback_data="noop")]
+        if not a.is_superadmin:
+            row.append(
+                InlineKeyboardButton(
+                    text="🗑",
+                    callback_data=AdminManageCB(
+                        action="delete_confirm",
+                        admin_id=a.id,
+                    ).pack(),
+                )
+            )
+        rows.append(row)
     rows.append([InlineKeyboardButton(text="➕ Добавить администратора", callback_data=AdminManageCB(action="add").pack())])
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=AdminMenuCB(target="root").pack())])
     return InlineKeyboardMarkup(inline_keyboard=rows)

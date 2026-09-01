@@ -76,15 +76,28 @@ async def is_admin(session: AsyncSession, telegram_id: int) -> bool:
     return admin is not None
 
 
+async def is_superadmin(session: AsyncSession, telegram_id: int) -> bool:
+    value = await session.scalar(
+        select(Admin.is_superadmin).where(Admin.telegram_id == telegram_id)
+    )
+    return bool(value)
+
+
 async def get_admin_by_telegram_id(session: AsyncSession, telegram_id: int) -> Admin | None:
     return await session.scalar(select(Admin).where(Admin.telegram_id == telegram_id))
 
 
 async def add_admin(
     session: AsyncSession, telegram_id: int, username: str | None, full_name: str | None,
-    added_by: int | None,
+    added_by: int | None, is_superadmin: bool = False,
 ) -> Admin:
-    admin = Admin(telegram_id=telegram_id, username=username, full_name=full_name, added_by=added_by)
+    admin = Admin(
+        telegram_id=telegram_id,
+        username=username,
+        full_name=full_name,
+        added_by=added_by,
+        is_superadmin=is_superadmin,
+    )
     session.add(admin)
     await session.commit()
     await session.refresh(admin)
@@ -110,15 +123,18 @@ async def admin_exists(session: AsyncSession, telegram_id: int) -> bool:
 
 async def delete_admin(session: AsyncSession, admin_id: int) -> tuple[bool, str]:
     """
-    Удаляет администратора, но никогда не позволяет удалить последнего.
-    Возвращает (успех, код_причины): "ok" / "last_admin" / "not_found".
+    Удаляет обычного администратора, но защищает суперадмина и последнюю
+    учётную запись. Возвращает (успех, код_причины):
+    "ok" / "superadmin" / "last_admin" / "not_found".
     """
-    total = await count_admins(session)
-    if total <= 1:
-        return False, "last_admin"
     admin = await session.get(Admin, admin_id)
     if not admin:
         return False, "not_found"
+    if admin.is_superadmin:
+        return False, "superadmin"
+    total = await count_admins(session)
+    if total <= 1:
+        return False, "last_admin"
     await session.delete(admin)
     await session.commit()
     return True, "ok"

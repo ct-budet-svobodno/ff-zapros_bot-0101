@@ -71,6 +71,14 @@ class Settings:
     initial_admin_ids: list[int] = field(
         default_factory=lambda: _parse_int_list(os.getenv("INITIAL_ADMIN_ID"))
     )
+    # Если SUPERADMIN_ID не задан, прежний INITIAL_ADMIN_ID получает права
+    # суперадмина для обратной совместимости с уже установленным ботом.
+    superadmin_ids: list[int] = field(
+        default_factory=lambda: (
+            _parse_int_list(os.getenv("SUPERADMIN_ID"))
+            or _parse_int_list(os.getenv("INITIAL_ADMIN_ID"))
+        )
+    )
     # Директория для временного хранения загружаемых файлов не нужна —
     # PDF храним по file_id Telegram (см. README, раздел "Хранение файлов").
     log_level: str = field(default_factory=lambda: _get_env("LOG_LEVEL", "INFO"))

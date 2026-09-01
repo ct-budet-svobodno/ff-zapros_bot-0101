@@ -12,7 +12,7 @@ from typing import Any
 from aiogram.filters import BaseFilter
 from aiogram.types import CallbackQuery, Message
 
-from database.crud import is_admin
+from database.crud import is_admin, is_superadmin
 from database.engine import async_session_maker
 
 
@@ -25,6 +25,18 @@ class IsAdmin(BaseFilter):
             return False
         async with async_session_maker() as session:
             allowed = await is_admin(session, user.id)
+        return allowed
+
+
+class IsSuperAdmin(BaseFilter):
+    """Пропускает только администратора с правом управления админами."""
+
+    async def __call__(self, event: Message | CallbackQuery) -> bool | dict[str, Any]:
+        user = event.from_user
+        if user is None:
+            return False
+        async with async_session_maker() as session:
+            allowed = await is_superadmin(session, user.id)
         return allowed
 
 

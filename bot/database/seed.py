@@ -1,6 +1,6 @@
 """
 Первичное заполнение БД:
-  * начальные администраторы из .env (INITIAL_ADMIN_ID);
+  * суперадминистраторы и начальные администраторы из .env;
   * тексты, зафиксированные в ТЗ (история факультета, инфо о Студсовете,
     текст об отборе);
   * руководители Студсовета (текущий состав из ТЗ, без фото — фото
@@ -76,12 +76,12 @@ CONTENT_SECTIONS = [
 COUNCIL_LEADERS = [
     ("Шишкова Алина", "Председатель", "yourfloret", 0),
     ("Летуновская Екатерина", "Первый Заместитель Председателя", "katrina007_0", 1),
-    ("Мазур Елизавета", "Заместитель председателя по Проектной деятельности", "dwimddd", 2),
-    ("Андреев Сергей", "Заместитель председателя по Учебно-Социальной деятельности", "foxssert", 3),
-    ("Ефимов Мирон", "Руководитель Направления Внешних Связей", "mironefimov", 4),
-    ("Дорохина Варвара", "Руководитель Информационного Направления", "ghtbrn", 5),
-    ("Семенов Дмитрий", "Руководитель Направления Развития и Корпоративной Культуры", "preciouslittlediamondd", 6),
-    ("Беляева Анастасия", "Секретарь", "atnnasy", 7),
+    ("Беляева Анастасия", "Секретарь", "atnnasy", 2),
+    ("Мазур Елизавета", "Заместитель председателя по Проектной деятельности", "dwimddd", 3),
+    ("Андреев Сергей", "Заместитель председателя по Учебно-Социальной деятельности", "foxssert", 4),
+    ("Ефимов Мирон", "Руководитель Направления Внешних Связей", "mironefimov", 5),
+    ("Дорохина Варвара", "Руководитель Информационного Направления", "ghtbrn", 6),
+    ("Семенов Дмитрий", "Руководитель Направления Развития и Корпоративной Культуры", "preciouslittlediamondd", 7),
 ]
 
 # Комитеты прямо перечислены в ТЗ (расшифровку названий и описание
@@ -95,11 +95,41 @@ PENDING_CLUBS = ["Клуб молодого финансиста", "Предпр
 
 
 async def seed_admins(session) -> None:
-    for admin_id in settings.initial_admin_ids:
+    superadmin_ids = set(settings.superadmin_ids)
+    bootstrap_ids = set(settings.initial_admin_ids) | superadmin_ids
+    for admin_id in bootstrap_ids:
         existing = await session.scalar(select(Admin).where(Admin.telegram_id == admin_id))
         if not existing:
-            session.add(Admin(telegram_id=admin_id, added_by=None))
+            session.add(
+                Admin(
+                    telegram_id=admin_id,
+                    is_superadmin=admin_id in superadmin_ids,
+                    added_by=None,
+                )
+            )
             logger.info("Добавлен начальный администратор: %s", admin_id)
+        elif admin_id in superadmin_ids:
+            existing.is_superadmin = True
+
+    await session.flush()
+    if superadmin_ids:
+        all_admins = list(await session.scalars(select(Admin)))
+        for admin in all_admins:
+            admin.is_superadmin = admin.telegram_id in superadmin_ids
+
+    has_superadmin = await session.scalar(
+        select(Admin.id).where(Admin.is_superadmin.is_(True)).limit(1)
+    )
+    if has_superadmin is None:
+        # Старые установки могут не иметь SUPERADMIN_ID в .env. Чтобы после
+        # миграции не заблокировать управление, повышаем самого первого админа.
+        first_admin = await session.scalar(select(Admin).order_by(Admin.added_at, Admin.id))
+        if first_admin is not None:
+            first_admin.is_superadmin = True
+            logger.info(
+                "Первый существующий администратор назначен суперадмином: %s",
+                first_admin.telegram_id,
+            )
 
 
 async def seed_content_sections(session) -> None:
@@ -110,8 +140,18 @@ async def seed_content_sections(session) -> None:
 
 
 async def seed_council_leaders(session) -> None:
-    existing_count = await session.scalar(select(CouncilLeader))
-    if existing_count:
+    existing_leaders = list(await session.scalars(select(CouncilLeader)))
+    if existing_leaders:
+        # Порядок хранится в БД, поэтому обновляем его и для уже запущенных
+        # установок. Остальные данные, которые администратор мог изменить,
+        # не затрагиваются.
+        order_by_username = {
+            username: order
+            for _, _, username, order in COUNCIL_LEADERS
+        }
+        for leader in existing_leaders:
+            if leader.telegram_username in order_by_username:
+                leader.sort_order = order_by_username[leader.telegram_username]
         return
     for full_name, position, username, order in COUNCIL_LEADERS:
         session.add(

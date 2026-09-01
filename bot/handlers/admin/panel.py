@@ -22,15 +22,27 @@ ADMIN_PANEL_TEXT = "🔐 Панель администратора"
 
 
 @router.message(Command("admin"), F.chat.type == "private")
-async def cmd_admin(message: Message, state: FSMContext) -> None:
+async def cmd_admin(message: Message, state: FSMContext, session: AsyncSession) -> None:
     await state.clear()
-    await message.answer(ADMIN_PANEL_TEXT, reply_markup=admin_main_menu_kb())
+    superadmin = await crud.is_superadmin(session, message.from_user.id)
+    await message.answer(
+        ADMIN_PANEL_TEXT,
+        reply_markup=admin_main_menu_kb(is_superadmin=superadmin),
+    )
 
 
 @router.callback_query(AdminMenuCB.filter(F.target == "root"))
-async def cb_admin_root(callback: CallbackQuery, state: FSMContext) -> None:
+async def cb_admin_root(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session: AsyncSession,
+) -> None:
     await state.clear()
-    await callback.message.edit_text(ADMIN_PANEL_TEXT, reply_markup=admin_main_menu_kb())
+    superadmin = await crud.is_superadmin(session, callback.from_user.id)
+    await callback.message.edit_text(
+        ADMIN_PANEL_TEXT,
+        reply_markup=admin_main_menu_kb(is_superadmin=superadmin),
+    )
     await callback.answer()
 
 
