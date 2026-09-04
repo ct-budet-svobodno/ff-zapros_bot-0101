@@ -23,6 +23,7 @@ from states.states import CouncilLeaderEditForm, CouncilLeaderForm
 from utils.admin_filter import IsAdmin
 from utils.callback_data import AdminMenuCB, FormControlCB, LeaderAdminCB
 from utils.formatting import escape_html, leader_position_detail_text
+from utils.navigation import show_text_screen
 
 router = Router(name="admin_leaders")
 router.message.filter(IsAdmin())
@@ -65,7 +66,7 @@ async def _render_detail(target_message: Message, leader, edit: bool = True) -> 
 async def cb_list(callback: CallbackQuery, session: AsyncSession) -> None:
     leaders = await crud.list_council_leaders(session, only_active=False)
     text = "👥 <b>Руководители Студсовета</b>\n\n" + ("Список пуст." if not leaders else "Выберите запись:")
-    await callback.message.edit_text(text, reply_markup=leaders_list_admin_kb(leaders), parse_mode="HTML")
+    await show_text_screen(callback.message, text, reply_markup=leaders_list_admin_kb(leaders), parse_mode="HTML")
     await callback.answer()
 
 
@@ -73,11 +74,7 @@ async def cb_list(callback: CallbackQuery, session: AsyncSession) -> None:
 async def cb_list_back(callback: CallbackQuery, session: AsyncSession) -> None:
     leaders = await crud.list_council_leaders(session, only_active=False)
     text = "👥 <b>Руководители Студсовета</b>\n\n" + ("Список пуст." if not leaders else "Выберите запись:")
-    try:
-        await callback.message.edit_text(text, reply_markup=leaders_list_admin_kb(leaders), parse_mode="HTML")
-    except Exception:
-        await callback.message.delete()
-        await callback.message.answer(text, reply_markup=leaders_list_admin_kb(leaders), parse_mode="HTML")
+    await show_text_screen(callback.message, text, reply_markup=leaders_list_admin_kb(leaders), parse_mode="HTML")
     await callback.answer()
 
 
@@ -91,7 +88,7 @@ async def cb_view(callback: CallbackQuery, callback_data: LeaderAdminCB, session
         await callback.message.delete()
         await _render_detail(callback.message, leader, edit=False)
     else:
-        await callback.message.edit_text(_detail_text(leader), reply_markup=leader_detail_admin_kb(leader), parse_mode="HTML")
+        await show_text_screen(callback.message, _detail_text(leader), reply_markup=leader_detail_admin_kb(leader), parse_mode="HTML")
     await callback.answer()
 
 

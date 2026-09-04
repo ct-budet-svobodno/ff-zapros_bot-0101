@@ -13,6 +13,7 @@ from database import crud
 from keyboards.admin_kb import admin_main_menu_kb, content_management_kb, requests_menu_admin_kb
 from utils.admin_filter import NOT_ADMIN_TEXT, IsAdmin
 from utils.callback_data import AdminMenuCB
+from utils.navigation import show_text_screen
 
 router = Router(name="admin_panel")
 router.message.filter(IsAdmin())
@@ -39,7 +40,8 @@ async def cb_admin_root(
 ) -> None:
     await state.clear()
     superadmin = await crud.is_superadmin(session, callback.from_user.id)
-    await callback.message.edit_text(
+    await show_text_screen(
+        callback.message,
         ADMIN_PANEL_TEXT,
         reply_markup=admin_main_menu_kb(is_superadmin=superadmin),
     )
@@ -49,7 +51,8 @@ async def cb_admin_root(
 @router.callback_query(AdminMenuCB.filter(F.target == "content"))
 async def cb_content_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text(
+    await show_text_screen(
+        callback.message,
         "📝 <b>Управление информацией</b>\n\nВыберите раздел:",
         reply_markup=content_management_kb(),
         parse_mode="HTML",

@@ -4,9 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import crud
 from keyboards.common_kb import BTN_COUNCIL
-from keyboards.user_kb import council_menu_kb, digests_kb, leaders_kb, media_kb
+from keyboards.user_kb import council_menu_kb, digests_kb, leader_detail_kb, leaders_kb, media_kb
 from utils.callback_data import DigestItemCB, LeaderAdminCB, MenuCB
 from utils.formatting import escape_html, leader_position_detail_text
+from utils.navigation import show_text_screen
 
 router = Router(name="user_council")
 router.message.filter(F.chat.type == "private")
@@ -26,7 +27,8 @@ async def show_council(message: Message, session: AsyncSession) -> None:
 async def cb_council(callback: CallbackQuery, session: AsyncSession) -> None:
     section = await crud.get_section(session, "council_info")
     text = escape_html(section.body) if section else PLACEHOLDER_EMPTY
-    await callback.message.edit_text(
+    await show_text_screen(
+        callback.message,
         f"🎓 <b>Студенческий совет</b>\n\n{text}", reply_markup=council_menu_kb(), parse_mode="HTML"
     )
     await callback.answer()
@@ -36,13 +38,15 @@ async def cb_council(callback: CallbackQuery, session: AsyncSession) -> None:
 async def cb_leaders(callback: CallbackQuery, session: AsyncSession) -> None:
     leaders = await crud.list_council_leaders(session)
     if not leaders:
-        await callback.message.edit_text(
+        await show_text_screen(
+            callback.message,
             f"👥 <b>Руководители Студенческого совета</b>\n\n{PLACEHOLDER_EMPTY}",
             reply_markup=leaders_kb([]),
             parse_mode="HTML",
         )
     else:
-        await callback.message.edit_text(
+        await show_text_screen(
+            callback.message,
             "👥 <b>Руководители Студенческого совета</b>\n\nВыберите руководителя:",
             reply_markup=leaders_kb(leaders),
             parse_mode="HTML",
@@ -66,10 +70,10 @@ async def cb_leader_detail(callback: CallbackQuery, callback_data: LeaderAdminCB
     if leader.photo_file_id:
         await callback.message.delete()
         await callback.message.answer_photo(
-            photo=leader.photo_file_id, caption=text, reply_markup=leaders_kb([leader]), parse_mode="HTML"
+            photo=leader.photo_file_id, caption=text, reply_markup=leader_detail_kb(), parse_mode="HTML"
         )
     else:
-        await callback.message.edit_text(text, reply_markup=leaders_kb([leader]), parse_mode="HTML")
+        await show_text_screen(callback.message, text, reply_markup=leader_detail_kb(), parse_mode="HTML")
     await callback.answer()
 
 

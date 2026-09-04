@@ -37,6 +37,10 @@ def faculty_admins_kb(people: list[FacultyAdminPerson]) -> InlineKeyboardMarkup:
     return kb_with_nav(rows, back_target="about")
 
 
+def faculty_admin_detail_kb() -> InlineKeyboardMarkup:
+    return kb_with_nav([], back_target="faculty_admins")
+
+
 def org_categories_kb(categories: list[StudentOrganization]) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(
         text=short_button_text(org.category),
@@ -77,6 +81,10 @@ def leaders_kb(leaders: list[CouncilLeader]) -> InlineKeyboardMarkup:
         callback_data=LeaderAdminCB(action="view", leader_id=l.id).pack(),
     )] for l in leaders]
     return kb_with_nav(rows, back_target="council")
+
+
+def leader_detail_kb() -> InlineKeyboardMarkup:
+    return kb_with_nav([], back_target="leaders")
 
 
 def digests_kb(digests: list[Digest]) -> InlineKeyboardMarkup:

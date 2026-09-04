@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.crud import get_or_create_user
 from keyboards.common_kb import main_menu_kb
 from utils.callback_data import MenuCB
+from utils.navigation import show_text_screen
 
 router = Router(name="user_start")
 
@@ -40,8 +41,7 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
 )
 async def cb_home_inline(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.delete()
-    await callback.message.answer("🏠 Главное меню:", reply_markup=main_menu_kb())
+    await show_text_screen(callback.message, "🏠 Главное меню:", reply_markup=main_menu_kb())
     await callback.answer()
 
 

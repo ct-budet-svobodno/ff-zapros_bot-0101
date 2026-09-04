@@ -7,6 +7,7 @@ from database import crud
 from keyboards.common_kb import BTN_ABOUT
 from keyboards.user_kb import (
     about_faculty_kb,
+    faculty_admin_detail_kb,
     faculty_admins_kb,
     org_categories_kb,
     org_item_detail_kb,
@@ -14,6 +15,7 @@ from keyboards.user_kb import (
 )
 from utils.callback_data import FacultyAdminCB, MenuCB, OrgCategoryCB, OrgItemCB
 from utils.formatting import escape_html
+from utils.navigation import show_text_screen
 
 router = Router(name="user_about")
 router.message.filter(F.chat.type == "private")
@@ -33,7 +35,8 @@ async def show_about(message: Message, session: AsyncSession) -> None:
 async def cb_show_about(callback: CallbackQuery, session: AsyncSession) -> None:
     section = await crud.get_section(session, "faculty_history")
     text = escape_html(section.body) if section else PLACEHOLDER_EMPTY
-    await callback.message.edit_text(
+    await show_text_screen(
+        callback.message,
         f"🏛 <b>О факультете</b>\n\n{text}", reply_markup=about_faculty_kb(), parse_mode="HTML"
     )
     await callback.answer()
@@ -43,13 +46,15 @@ async def cb_show_about(callback: CallbackQuery, session: AsyncSession) -> None:
 async def cb_faculty_admins(callback: CallbackQuery, session: AsyncSession) -> None:
     people = await crud.list_faculty_admins(session)
     if not people:
-        await callback.message.edit_text(
+        await show_text_screen(
+            callback.message,
             f"👥 <b>Администрация факультета</b>\n\n{PLACEHOLDER_EMPTY}",
             reply_markup=faculty_admins_kb([]),
             parse_mode="HTML",
         )
     else:
-        await callback.message.edit_text(
+        await show_text_screen(
+            callback.message,
             "👥 <b>Администрация факультета</b>\n\nВыберите представителя администрации:",
             reply_markup=faculty_admins_kb(people),
             parse_mode="HTML",
@@ -71,10 +76,10 @@ async def cb_faculty_admin_detail(callback: CallbackQuery, callback_data: Facult
     if person.photo_file_id:
         await callback.message.delete()
         await callback.message.answer_photo(
-            photo=person.photo_file_id, caption=text, reply_markup=faculty_admins_kb([person]), parse_mode="HTML"
+            photo=person.photo_file_id, caption=text, reply_markup=faculty_admin_detail_kb(), parse_mode="HTML"
         )
     else:
-        await callback.message.edit_text(text, reply_markup=faculty_admins_kb([person]), parse_mode="HTML")
+        await show_text_screen(callback.message, text, reply_markup=faculty_admin_detail_kb(), parse_mode="HTML")
     await callback.answer()
 
 

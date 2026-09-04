@@ -24,6 +24,7 @@ from states.states import FacultyAdminEditForm, FacultyAdminForm
 from utils.admin_filter import IsAdmin
 from utils.callback_data import AdminMenuCB, FacultyAdminCB, FormControlCB
 from utils.formatting import escape_html
+from utils.navigation import show_text_screen
 
 router = Router(name="admin_faculty_admins")
 router.message.filter(IsAdmin())
@@ -68,7 +69,7 @@ async def cb_list(callback: CallbackQuery, session: AsyncSession) -> None:
     text = "👥 <b>Администрация факультета</b>\n\n" + (
         "Список пуст. Добавьте первого представителя." if not people else "Выберите запись:"
     )
-    await callback.message.edit_text(text, reply_markup=fadmins_list_kb(people), parse_mode="HTML")
+    await show_text_screen(callback.message, text, reply_markup=fadmins_list_kb(people), parse_mode="HTML")
     await callback.answer()
 
 
@@ -78,12 +79,7 @@ async def cb_list_back(callback: CallbackQuery, session: AsyncSession) -> None:
     text = "👥 <b>Администрация факультета</b>\n\n" + (
         "Список пуст. Добавьте первого представителя." if not people else "Выберите запись:"
     )
-    # Предыдущее сообщение могло быть фото (с фото нельзя edit_text) — подстрахуемся.
-    try:
-        await callback.message.edit_text(text, reply_markup=fadmins_list_kb(people), parse_mode="HTML")
-    except Exception:
-        await callback.message.delete()
-        await callback.message.answer(text, reply_markup=fadmins_list_kb(people), parse_mode="HTML")
+    await show_text_screen(callback.message, text, reply_markup=fadmins_list_kb(people), parse_mode="HTML")
     await callback.answer()
 
 
@@ -97,7 +93,7 @@ async def cb_view(callback: CallbackQuery, callback_data: FacultyAdminCB, sessio
         await callback.message.delete()
         await _render_detail(callback.message, person, edit=False)
     else:
-        await callback.message.edit_text(_detail_text(person), reply_markup=fadmin_detail_kb(person), parse_mode="HTML")
+        await show_text_screen(callback.message, _detail_text(person), reply_markup=fadmin_detail_kb(person), parse_mode="HTML")
     await callback.answer()
 
 
