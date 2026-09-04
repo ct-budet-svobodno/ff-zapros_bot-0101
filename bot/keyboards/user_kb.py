@@ -20,7 +20,7 @@ from utils.formatting import leader_position_button_text
 
 def about_faculty_kb() -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton(text="👥 Администрация", callback_data=MenuCB(target="faculty_admins").pack())],
+        [InlineKeyboardButton(text="👥 Руководство факультета", callback_data=MenuCB(target="faculty_admins").pack())],
         [InlineKeyboardButton(text="🤝 Студенческие организации", callback_data=MenuCB(target="orgs").pack())],
     ]
     return kb_with_nav(rows, back_target="home")

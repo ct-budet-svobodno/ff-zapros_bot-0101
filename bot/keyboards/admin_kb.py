@@ -53,7 +53,7 @@ def content_management_kb() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text="📖 Тексты (история, инфо о Студсовете, отбор)",
                                callback_data=AdminMenuCB(target="content_sections").pack())],
-        [InlineKeyboardButton(text="👥 Администрация факультета", callback_data=AdminMenuCB(target="content_fadmins").pack())],
+        [InlineKeyboardButton(text="👥 Руководство факультета", callback_data=AdminMenuCB(target="content_fadmins").pack())],
         [InlineKeyboardButton(text="🤝 Студенческие организации", callback_data=AdminMenuCB(target="content_orgs").pack())],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data=AdminMenuCB(target="root").pack())],
     ]
